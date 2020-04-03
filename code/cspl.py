@@ -17,19 +17,21 @@ def cspl(X1,X2,k=None,mu=1,beta=1,lambda_mu=0.05,lambda_v=0.2,lambda_a=0.2,lambd
     
     #np.random.seed(0)
     U=np.random.randn(d,k) #如果不降低样本维数，譬如lomo特征立马会爆内存，导致死机，因为通过计算，
-                           #假设浮点数以64位存储的话，此处预分配的6个矩阵需要大约16G内存用量
+                           #假设浮点数以64位存储的话，此处预分配的6个矩阵需要大约16G内存用量。但论
+                           #文中并无降维步骤，viper lomo特征从26960降维到600维后仅需要约13M内存
     V1=np.random.randn(k,n)
     V2=np.random.randn(k,n)
     P1=np.random.randn(k,d)
     P2=np.random.randn(k,d)
     A=np.eye(k)
+    #A=np.random.randn(k,k)
     
     for i in count():
         print('iter %d'%i,end='\r')
         if iter!=None and i>=iter:
             print('cspl max iteration')
             break
-        old_U=U
+        old_U=U #成倍的内存
         U=(X1.dot(V1.T)+X2.dot(V2.T)).dot(inv(V1.dot(V1.T)+V2.dot(V2.T)+lambda_mu*np.eye(k)))
         old_V1=V1
         V1=inv(U.T.dot(U)+(mu+beta+lambda_v)*np.eye(k)).dot(U.T.dot(X1)+beta*A.dot(V2)+mu*P1.dot(X1))

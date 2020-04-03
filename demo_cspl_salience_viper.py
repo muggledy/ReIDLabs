@@ -1,4 +1,4 @@
-from code.lomo.lomo import load_data,get_hsv,get_siltp
+from code.salience.extractDescriptors import extractDescriptorsFromCam
 from code.lomo.tools import getcwd,calc_cmc,plot_cmc
 from code.cspl import cspl
 from code.tools import euc_dist
@@ -10,45 +10,45 @@ import time
 cwd=getcwd(__file__)
 
 t1=time.time()
-# --Stage1: get lomo features--
-feat_file=os.path.join(cwd,'data/lomo_features_viper.npz')
+# --Stage1: get salience features--
+feat_file=os.path.join(cwd,'data/salience_features_viper.npz')
 
 if not os.path.exists(feat_file):
     img_path=os.path.normpath(os.path.join(cwd,'images/VIPeR.v1.0/cam_a'))
-    imgs=load_data(img_path)
-    fea1=get_hsv(imgs)
-    fea2=get_siltp(imgs,R=3)
-    fea3=get_siltp(imgs,R=5)
-    probe=np.hstack((fea1,fea2,fea3))
+    probe=extractDescriptorsFromCam(img_path)[0]
     img_path=os.path.normpath(os.path.join(cwd,'images/VIPeR.v1.0/cam_b'))
-    imgs=load_data(img_path)
-    fea1=get_hsv(imgs)
-    fea2=get_siltp(imgs,R=3)
-    fea3=get_siltp(imgs,R=5)
-    gallery=np.hstack((fea1,fea2,fea3))
-    np.savez(feat_file,probe=probe,gallery=gallery)
+    gallery=extractDescriptorsFromCam(img_path)[0]
+    np.savez(feat_file,probe=probe.T,gallery=gallery.T)
 else:
-    print('viper lomo features have existed!')
+    print('viper salience features have existed!')
 
-#'''使用我写的lomo特征
 data=np.load(feat_file)
 probFea=data['probe']
 galFea=data['gallery']
-#'''
-'''使用官方带有retinex的lomo特征，没区别
-import scipy.io as sio
-data=sio.loadmat(os.path.normpath(os.path.join(cwd,'data/viper_lomo.mat')))['descriptors']
-probFea=data[:,:632].T
-galFea=data[:,632:].T
-'''
 print('load probe features:%s, load gallery features:%s'%(probFea.shape[::-1],galFea.shape[::-1]))
-pca=PCA(n_components=100) #设为600(99%)和设为100(56%)没区别，惊奇。PCA参考：https://www.cnblogs.com/pinard/p/6243025.html
-probFea=pca.fit_transform(probFea)
-probEnergy=sum(pca.explained_variance_ratio_)
-galFea=pca.fit_transform(galFea)
-galEnergy=sum(pca.explained_variance_ratio_)
-probFea=probFea.T
-galFea=galFea.T
+
+n_components=100
+W_file=os.path.join(cwd,'data/salience_features_viper_pca%d.npz'%n_components)
+if not os.path.exists(W_file):
+    pca=PCA(n_components=n_components)
+    probFea=pca.fit_transform(probFea)
+    probW=pca.components_
+    probEnergy=sum(pca.explained_variance_ratio_)
+    galFea=pca.fit_transform(galFea)
+    galW=pca.components_
+    galEnergy=sum(pca.explained_variance_ratio_)
+    np.savez(W_file,probW=probW,probEnergy=probEnergy,galW=galW,galEnergy=galEnergy)
+    probFea=probFea.T
+    galFea=galFea.T
+else:
+    print('get pca%d from local'%n_components)
+    data=np.load(W_file)
+    probW=data['probW']
+    probEnergy=data['probEnergy']
+    probFea=probW.dot(probFea.T)
+    galW=data['galW']
+    galEnergy=data['galEnergy']
+    galFea=galW.dot(galFea.T)
 print('reduct probe dimension(energy:%.2f%%):%s, reduct gallery dimension(energy:%.2f%%):%s'%(probEnergy,probFea.shape,galEnergy,galFea.shape))
 
 # --Stage2: train and match--
