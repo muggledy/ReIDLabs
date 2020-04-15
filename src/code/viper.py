@@ -80,3 +80,4 @@ def get_salience_viper(pca_n_components=None):
         W_file=os.path.join(cwd,'../../data/salience_features_viper_pca%d.npz'%pca_n_components)
         return pca_reduct_dim(probe,gallery,pca_n_components,W_file)
     return probe,gallery
+

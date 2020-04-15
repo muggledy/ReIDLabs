@@ -1,0 +1,69 @@
+import numpy as np
+from scipy.linalg import logm
+import logging
+logger = logging.getLogger(__name__)
+
+def calc_mean_conv(X,weights=None):
+    '''X's last three dims represent one patch(h,w,d), we calculate these patches' 
+       covariance matrix and mean vector, if X's shape is (...,h,w,d), conv will be 
+       (...,d,d) and mean be (...,d). Note that weights' shape should be (...,h,w)'''
+    flag=isinstance(weights,np.ndarray)
+    if flag:
+        if weights.shape!=X.shape[:-1]:
+            raise ValueError('weights\' shape should be (...,h,w)!')
+        ws=np.sum(weights,axis=(-2,-1))
+        mean=np.sum(X*weights[...,None],axis=(-3,-2))/(ws[...,None])
+    else:
+        mean=np.mean(X,axis=(-3,-2))
+    norm_X=X-mean[...,None,None,:]
+    norm_X=norm_X.reshape(*(norm_X.shape[:-3]),-1,norm_X.shape[-1])
+    norm_XT=np.swapaxes(norm_X,-2,-1)
+    if flag:
+        conv=np.matmul(norm_XT*weights.reshape( \
+             *(weights.shape[:-2]),-1)[...,None,:],norm_X)/(ws[...,None,None])
+    else:
+        conv=np.matmul(norm_XT,norm_X)/(norm_X.shape[-2]-1)
+    return mean,conv
+
+def half_vec(X):
+    '''X may be a N-d array, we half-vectoralize X's last two dimensions, note that 
+       these sub-matrix should be symmetric, if X's shape is (...,d,d), we will get a 
+       matrix of (...,(d^2+3d)/2+1)'''
+    d,_=X.shape[-2:]
+    if d!=_:
+        raise ValueError('X\'s last two dimensions must be equal!')
+    indx,indy=np.triu_indices(d)
+    return X[...,indx,indy]
+
+def patch_gaussian(X,weights=None,eps=0.001):
+    '''GoG paper refers Integral Images for Fast Covariance Computation in "Pedestrian 
+       Detection via Classification on Riemannian Manifolds", utilizing multi thread 
+       with matlab, i don't want to follow in python because it may be extremely poor 
+       , so i use matrix parallel computing of numpy herein, despite of much repeated 
+       calculations, it is still very fast(thanks god). See func calc_mean_conv about 
+       X, and weights's effect is exerted on patches' mean and conv. This function can 
+       be utilized by region gaussian'''
+    d=X.shape[-1]
+    logger.info('calc patch/region gaussian vectors%s'%str((*X.shape[:-3], \
+        (d**2+3*d)//2+1)))
+    if len(X.shape)<3:
+        raise ValueError('X\'s shape should be (...,h,w,c)!')
+    mean,conv=calc_mean_conv(X,weights)
+    mmT=np.matmul(mean[...,None],mean[...,None,:])
+    sP=np.zeros((*(mmT.shape[:-2]),*((d+1,)*2)))
+    sP[...,:-1,:-1]=conv+mmT
+    sP[...,:-1,[-1]]=mean[...,None]
+    sP[...,[-1],:-1]=mean[...,None,:]
+    sP[...,-1,-1]=1
+    dets=(np.linalg.det(conv+eps*np.eye(d))**(-1/(d+1)))[...,None,None]
+    sP*=dets #patch gaussian matrix
+    #source code uses logm, but if i use python version(scipy.linalg.logm), the code 
+    #will be very very very very slow, i have no solution currently
+    sP[sP<0]=0
+    sP=np.log(sP+0.000001) #::>_<::
+    #see https://ww2.mathworks.cn/help/matlab/ref/logm.html
+    #and https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.linalg.logm.html
+    diags=sP[...,range(d+1),range(d+1)]
+    sP*=np.sqrt(2)
+    sP[...,range(d+1),range(d+1)]=diags
+    return half_vec(sP)
