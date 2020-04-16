@@ -1,5 +1,5 @@
+from .logm import logm0
 import numpy as np
-from scipy.linalg import logm
 import logging
 logger = logging.getLogger(__name__)
 
@@ -35,17 +35,19 @@ def half_vec(X):
     indx,indy=np.triu_indices(d)
     return X[...,indx,indy]
 
-def patch_gaussian(X,weights=None,eps=0.001):
+def patch_gaussian(X,weights=None,eps=0.001,**kwargs):
     '''GoG paper refers Integral Images for Fast Covariance Computation in "Pedestrian 
        Detection via Classification on Riemannian Manifolds", utilizing multi thread 
        with matlab, i don't want to follow in python because it may be extremely poor 
        , so i use matrix parallel computing of numpy herein, despite of much repeated 
-       calculations, it is still very fast(thanks god). See func calc_mean_conv about 
-       X, and weights's effect is exerted on patches' mean and conv. This function can 
-       be utilized by region gaussian'''
+       calculations, it is still very fast. See func calc_mean_conv about X, and 
+       weights's effect is exerted on patches' mean and conv. This function can also be 
+       utilized by region gaussian, don't be confused by the func name'''
     d=X.shape[-1]
-    logger.info('calc patch/region gaussian vectors%s'%str((*X.shape[:-3], \
-        (d**2+3*d)//2+1)))
+    stage_name=kwargs.get('stage','patch/region')
+    logger.info('calc %s gaussian vectors%s'%(stage_name, \
+                                        str((*X.shape[:-3],(d**2+3*d)//2+1)))) #equal 
+                                        #to the shape of half_vec(sP) at last
     if len(X.shape)<3:
         raise ValueError('X\'s shape should be (...,h,w,c)!')
     mean,conv=calc_mean_conv(X,weights)
@@ -58,12 +60,13 @@ def patch_gaussian(X,weights=None,eps=0.001):
     dets=(np.linalg.det(conv+eps*np.eye(d))**(-1/(d+1)))[...,None,None]
     sP*=dets #patch gaussian matrix
     #source code uses logm, but if i use python version(scipy.linalg.logm), the code 
-    #will be very very very very slow, i have no solution currently
-    sP[sP<0]=0
-    sP=np.log(sP+0.000001) #::>_<::
-    #see https://ww2.mathworks.cn/help/matlab/ref/logm.html
-    #and https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.linalg.logm.html
+    #will be very very very very very slow, i have no solution currently
+    logger.info('calc logm of all %s gaussian...'%stage_name)
+    sP=logm0(sP)
+    #see https://ww2.mathworks.cn/help/matlab/ref/logm.html and
+    #https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.linalg.logm.html
     diags=sP[...,range(d+1),range(d+1)]
     sP*=np.sqrt(2)
     sP[...,range(d+1),range(d+1)]=diags
+    logger.info('half-vectoralize %s gaussian'%stage_name)
     return half_vec(sP)

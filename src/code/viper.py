@@ -3,6 +3,8 @@ import os.path
 from .lomo.lomo import load_data,get_hsv,get_siltp
 from .lomo.tools import getcwd
 from .salience.extractDescriptors import extractDescriptorsFromCam
+from .gog.gog import GOG
+from .gog.set_parameter import get_default_parameter
 from sklearn.decomposition import PCA
 
 cwd=getcwd(__file__)
@@ -81,3 +83,40 @@ def get_salience_viper(pca_n_components=None):
         return pca_reduct_dim(probe,gallery,pca_n_components,W_file)
     return probe,gallery
 
+def get_gog_viper():
+    '''return probe(n*dim,cam_a) and gallery(n*dim,cam_b) of VIPeR dataset's GOG 
+       descriptors'''
+    feat_file=os.path.join(cwd,'../../data/gog_features_viper.npz')
+    if not os.path.exists(feat_file):
+        dim=0
+        param=get_default_parameter()
+        for i in range(4): #get fusion(four color space:RGB,HSV,Lab,nRnG) GOG 
+                           #descriptor's dim(equal for arbitrary image size)
+            param.lfparam.lf_type=i
+            dim+=param.dimension
+        imgs=load_data(cam_a_dir) #probe
+        n=imgs.shape[-1]
+        probe=np.zeros((n,dim))
+        for i in range(n):
+            im=imgs[...,i]
+            feas=[]
+            for j in range(4):
+                param=get_default_parameter(j)
+                feas.append(GOG(im,param))
+            probe[i,:]=np.hstack(feas)
+        imgs=load_data(cam_b_dir) #gallery
+        n=imgs.shape[-1]
+        gallery=np.zeros((n,dim))
+        for i in range(n):
+            im=imgs[...,i]
+            feas=[]
+            for j in range(4):
+                param=get_default_parameter(j)
+                feas.append(GOG(im,param))
+            gallery[i,:]=np.hstack(feas)
+        np.savez(feat_file,probe=probe,gallery=gallery)
+    else:
+        print('viper gog features have existed!')
+        data=np.load(feat_file)
+        probe,gallery=data['probe'],data['gallery']
+    return probe,gallery

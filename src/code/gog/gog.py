@@ -8,6 +8,7 @@ muggledy 2020/4/3
 
 import numpy as np
 import logging
+import time
 from .get_pixel_features import get_pixel_features
 from .utils import get_patches,window_nd
 from .set_parameter import get_default_parameter
@@ -37,6 +38,7 @@ def GOG(img,param=None):
     '''get Gaussian of Gaussian(GOG) descriptor of img(h,w,3), param is the parameters 
        required for running, you can get param from parameter.get_default_parameter() 
        quickly'''
+    t0=time.time()
     if param==None:
         param=get_default_parameter()
     logger.info('get %s descriptor of the image'%param.name)
@@ -48,7 +50,7 @@ def GOG(img,param=None):
     logger.info( \
       'split into fine-grained patches(with size %d, interval %d) for each strip%s'% \
                                            (param.k,param.p,str(spatches.shape)))
-    t=patch_gaussian(spatches,None,param.epsilon0)
+    t=patch_gaussian(spatches,None,param.epsilon0,stage='patch')
     if param.ifweight:
         logger.info('use weight on region gaussian')
         img_x=np.broadcast_to(np.arange(1,img.shape[1]+1)[None,:,None],(*(img.shape[:-1]),1))
@@ -59,6 +61,7 @@ def GOG(img,param=None):
         weights=np.exp((-(weights-(img.shape[1]/2))**2)/(2*(img.shape[1]/4)**2))
     else:
         weights=None
-    t=patch_gaussian(t,weights,param.epsilon0).ravel() #region gaussian(see regions 
-                                                #in img like patches in region)
+    t=patch_gaussian(t,weights,param.epsilon0,stage='region').ravel() #region gaussian
+                                                #(see regions in img like patches in region)
+    print(param.name,t.shape[0],time.time()-t0)
     return t
