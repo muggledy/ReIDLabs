@@ -1,6 +1,6 @@
 from scipy.linalg import logm
 import numpy as np
-from functools import reduce
+import tensorflow as tf
 
 def logm0(X):
     '''X's shape is (...,d,d), i.e. X's last two dimension must be 
@@ -17,12 +17,12 @@ def logm0(X):
                                 #8 hours on VIPeR now!
     return ret.reshape(shape)
 
-'''ERROR
 def logm1(X):
-    shape=X.shape
-    nums=reduce(lambda x,y:x*y,shape)
-    n=int(np.ceil(np.sqrt(nums)))
-    X=np.hstack((X.ravel(),np.zeros((n**2-nums,)))).reshape(n,n)
-    ret=logm(X+0.001*np.eye(n)).ravel()[:nums]
-    return ret.real.reshape(shape)
-'''
+    '''calculate log of matrix with tensorflow-gpu, very fast, takes 
+       only 200s on VIPeR now'''
+    d=X.shape[-1]
+    X=X+np.eye(d)*0.01
+    real=tf.convert_to_tensor(X,dtype=tf.float32)
+    img=tf.convert_to_tensor(np.zeros(X.shape),dtype=tf.float32)
+    data=tf.complex(real,img)
+    return tf.math.real(tf.linalg.logm(data)).numpy()
