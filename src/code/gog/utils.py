@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from ..cprint import cprint_err
 
 def window_nd(a, window, steps = None, axis = None, outlist = False):
     """
@@ -161,6 +162,30 @@ def plot_patches(patches):
     
     plt.imshow(dst_img[...,::-1])
     plt.show()
+
+def normalize(Z):
+    '''z:=(z-z')/||z-z'||2, z'=mean({z1,z2,...,zn}). Note that zi:=Z[:,i] represents 
+       one sample feature. This function aims to normalize all samples' GoG descriptors'''
+    mean=np.mean(Z,axis=1)[:,None]
+    t=Z-mean
+    return t/(np.sqrt(np.sum(t**2,axis=0))+np.finfo(np.float32).eps) #t/np.linalg.norm(t,axis=0)
+
+def matrix_regularize(X,eps=0.001):
+    '''eliminate singular matrix. X's shape is (...,d,d), eps can be scalar 
+       or ndarray, if eps is ndarray object, it's shape must be (...,), then 
+       we will add eps[i1,...,ik] to X[i1,...,ik,d,d]'s diagonal elements'''
+    d=X.shape[-1]
+    if np.any((np.array(eps)>=0.1)|(np.array(eps)<=0)):
+        cprint_err('[WARNNING] regularization shoule be in (0,0.1)!')
+    if isinstance(eps,np.ndarray):
+        if eps.shape==X.shape[:-2]:
+            Y=np.zeros(X.shape)
+            Y[...,range(d),range(d)]=np.broadcast_to(eps[...,None],X.shape[:-1])
+            return X+Y
+        else:
+            raise ValueError('eps\'s shape must be equal to X\'s shape[:-2]!')
+    else:
+        return X+np.eye(d)*eps
 
 if __name__=='__main__':
     import os.path

@@ -1,4 +1,5 @@
-from .logm import logm0
+from .logm import logm0,logm1
+from .utils import matrix_regularize
 import numpy as np
 import logging
 logger = logging.getLogger(__name__)
@@ -57,13 +58,16 @@ def patch_gaussian(X,weights=None,eps=0.001,**kwargs):
     sP[...,:-1,[-1]]=mean[...,None]
     sP[...,[-1],:-1]=mean[...,None,:]
     sP[...,-1,-1]=1
-    dets=(np.linalg.det(conv+eps*np.eye(d))**(-1/(d+1)))[...,None,None]
+    if stage_name=='patch':
+        #eps*=np.maximum(np.trace(conv,axis1=-1,axis2=-2),0.01) #trace norm regularization
+        pass
+    elif stage_name=='region':
+        #eps*=np.trace(conv,axis1=-1,axis2=-2) #seems no effect
+        pass
+    dets=(np.linalg.det(matrix_regularize(conv,eps))**(-1/(d+1)))[...,None,None]
     sP*=dets #patch gaussian matrix
-    #source code uses logm, but if i use python version(scipy.linalg.logm), the code 
-    #will be very very very very very slow, i have no solution currently
     logger.info('calc logm of all %s gaussian...'%stage_name)
-    sP=logm0(sP)
-    #see https://ww2.mathworks.cn/help/matlab/ref/logm.html and
+    sP=logm1(sP) #see https://ww2.mathworks.cn/help/matlab/ref/logm.html and
     #https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.linalg.logm.html
     diags=sP[...,range(d+1),range(d+1)]
     sP*=np.sqrt(2)

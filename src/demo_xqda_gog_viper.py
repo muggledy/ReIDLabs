@@ -1,19 +1,23 @@
 from code.viper import get_gog_viper
 from code.lomo.xqda import xqda
 from code.lomo.tools import mah_dist,calc_cmc,plot_cmc
+from code.gog.utils import normalize
 import numpy as np
 import time
 
 t1=time.time()
 probe,gallery=get_gog_viper()
 
-numClass = 632
-probFea=probe.T
-galFea=gallery.T
+probFea=normalize(probe.T) #seems no effect
+galFea=normalize(gallery.T)
 
+#probFea=probe.T
+#galFea=gallery.T
+
+numClass = 632
 numRank=100
-numFolds=1
-k=np.random.randint(0,numFolds)
+numFolds=10
+
 cs=np.zeros((numFolds,numRank),np.float)
 
 for i in range(numFolds):

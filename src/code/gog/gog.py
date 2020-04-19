@@ -14,7 +14,7 @@ from .utils import get_patches,window_nd
 from .set_parameter import get_default_parameter
 from .gauss import patch_gaussian
 
-logging.basicConfig(level=logging.INFO,format=
+logging.basicConfig(level=logging.WARN,format=
                                  '[%(asctime)s] %(name)s(%(levelname)s): %(message)s',
                                                 #datefmt='%a %d %b %Y %H:%M:%S'
                                                 )
@@ -63,5 +63,5 @@ def GOG(img,param=None):
         weights=None
     t=patch_gaussian(t,weights,param.epsilon0,stage='region').ravel() #region gaussian
                                                 #(see regions in img like patches in region)
-    print(param.name,t.shape[0],time.time()-t0)
+    #print(param.name,t.shape[0],time.time()-t0)
     return t

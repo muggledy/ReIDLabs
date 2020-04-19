@@ -5,6 +5,7 @@ from .lomo.tools import getcwd
 from .salience.extractDescriptors import extractDescriptorsFromCam
 from .gog.gog import GOG
 from .gog.set_parameter import get_default_parameter
+from .cprint import cprint,cprint_out
 from sklearn.decomposition import PCA
 
 cwd=getcwd(__file__)
@@ -83,6 +84,19 @@ def get_salience_viper(pca_n_components=None):
         return pca_reduct_dim(probe,gallery,pca_n_components,W_file)
     return probe,gallery
 
+def get_salience_patch_viper():
+    '''get viper's salience features at patch-level'''
+    feat_file=os.path.join(cwd,'../../data/salience_patch_features_viper.npz')
+    if not os.path.exists(feat_file):
+        probe,nx,ny=extractDescriptorsFromCam(cam_a_dir,level='patch')
+        gallery,*_=extractDescriptorsFromCam(cam_b_dir,level='patch')
+        np.savez(feat_file,probe=probe,gallery=gallery,nx=nx,ny=ny)
+    else:
+        print('viper salience patch features have existed!')
+        data=np.load(feat_file)
+        probe,gallery,nx,ny=data['probe'],data['gallery'],data['nx'],data['ny']
+    return probe,gallery,nx,ny
+
 def get_gog_viper():
     '''return probe(n*dim,cam_a) and gallery(n*dim,cam_b) of VIPeR dataset's GOG 
        descriptors'''
@@ -90,33 +104,53 @@ def get_gog_viper():
     if not os.path.exists(feat_file):
         dim=0
         param=get_default_parameter()
+        param.ifweight=True
         for i in range(4): #get fusion(four color space:RGB,HSV,Lab,nRnG) GOG 
                            #descriptor's dim(equal for arbitrary image size)
             param.lfparam.lf_type=i
             dim+=param.dimension
+        cprint('Calc GoG of Probe...',fcolor='blue')
         imgs=load_data(cam_a_dir) #probe
         n=imgs.shape[-1]
         probe=np.zeros((n,dim))
         for i in range(n):
+            if i%100==0:
+                cprint_out('%d/n'%i,end='\r')
             im=imgs[...,i]
-            feas=[]
+            #feas=[]
+            feas=np.zeros(dim)
+            start=0
             for j in range(4):
-                param=get_default_parameter(j)
-                feas.append(GOG(im,param))
-            probe[i,:]=np.hstack(feas)
+                param.lfparam.lf_type=j
+                #feas.append(GOG(im,param))
+                fea=GOG(im,param)
+                feas[start:start+fea.shape[0]]=fea
+                start+=fea.shape[0]
+            #probe[i,:]=np.hstack(feas)
+            probe[i,:]=feas
+        cprint('Calc GoG of Gallery...',fcolor='blue')
         imgs=load_data(cam_b_dir) #gallery
         n=imgs.shape[-1]
         gallery=np.zeros((n,dim))
         for i in range(n):
+            if i%100==0:
+                cprint_out('%d/n'%i,end='\r')
             im=imgs[...,i]
-            feas=[]
+            #feas=[]
+            feas=np.zeros(dim)
+            start=0
             for j in range(4):
-                param=get_default_parameter(j)
-                feas.append(GOG(im,param))
-            gallery[i,:]=np.hstack(feas)
+                param.lfparam.lf_type=j
+                #feas.append(GOG(im,param))
+                fea=GOG(im,param)
+                feas[start:start+fea.shape[0]]=fea
+                start+=fea.shape[0]
+            #gallery[i,:]=np.hstack(feas)
+            gallery[i,:]=feas
         np.savez(feat_file,probe=probe,gallery=gallery)
     else:
-        print('viper gog features have existed!')
+        cprint_out('viper gog features have existed!',end=' ')
         data=np.load(feat_file)
         probe,gallery=data['probe'],data['gallery']
+    cprint_out('probe(gog)%s, gallery(gog)%s'%(str(probe.shape),str(gallery.shape)))
     return probe,gallery
