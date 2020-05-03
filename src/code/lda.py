@@ -8,7 +8,7 @@ muggledy 2020/4/3
 
 import numpy as np
 from sklearn.decomposition import PCA
-from .lomo.tools import measure_time
+#from .lomo.tools import measure_time
 from .tools import norm_labels
 from functools import reduce
 
@@ -52,7 +52,7 @@ def lda(X,labels,n_components=None,regularizer=None):
     maxSortedInd=np.argsort(eigVals)[::-1][:c-1 if n_components==None else n_components]
     return eigVects[:,maxSortedInd]
 
-@measure_time
+#@measure_time
 def pca_lda(X,labels):
     '''X(d*n) is the training samples, each column represents one sample. X can be 
        unordered but you must provide their labels(id). We all know that LDA confronts 
@@ -63,13 +63,13 @@ def pca_lda(X,labels):
     d,n=X.shape
     X=np.float32(X)
     c=len(np.unique(labels))
-    #99% memory usage! But sklearn's PCA does very well!
-        #X0=X-X.dot(np.ones((n,1)))*(1/n)
-        #cov=X0.dot(X0.T)*(1/n) #covariance matrix
-        #eigVals,eigVects=numpy.linalg.eig(cov)
-        #maxSortedInd=np.argsort(eigVals)[::-1][:n-c]
-        #W=eigVects[maxSortedInd]
-        #X=W.T.dot(X)
+    #99% memory usage! But sklearn's PCA does very well!(cattle beer)
+    #X0=X-X.dot(np.ones((n,1)))*(1/n)
+    #cov=X0.dot(X0.T)*(1/n) #covariance matrix
+    #eigVals,eigVects=numpy.linalg.eig(cov)
+    #maxSortedInd=np.argsort(eigVals)[::-1][:n-c]
+    #W=eigVects[maxSortedInd]
+    #X=W.T.dot(X)
     pca=PCA(n_components=n-c)
     pca.fit(X.T)
     WT=pca.components_

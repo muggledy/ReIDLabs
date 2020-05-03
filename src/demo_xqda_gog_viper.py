@@ -1,3 +1,9 @@
+'''
+Rank1 preserves to be 35% on VIPeR with official arguments in 
+paper(49%), i don't know if it is my problem and if 49% is a 
+stable value
+'''
+
 from code.viper import get_gog_viper
 from code.lomo.xqda import xqda
 from code.lomo.tools import mah_dist,calc_cmc,plot_cmc
@@ -6,9 +12,9 @@ import numpy as np
 import time
 
 t1=time.time()
-probe,gallery=get_gog_viper()
+probe,gallery=get_gog_viper() #mask='ellipse' no help
 
-probFea=normalize(probe.T) #seems no effect
+probFea=normalize(probe.T) #seems no great effect
 galFea=normalize(gallery.T)
 
 #probFea=probe.T
@@ -34,7 +40,7 @@ for i in range(numFolds):
     cs[i]=c
 
 c_mean=np.mean(cs,axis=0)
-print('CMC分值：')
+print('CMC:')
 print(c_mean)
-print('总的时间消耗：',time.time()-t1)
+print('time consumes:',time.time()-t1)
 plot_cmc(c_mean,['viper'],verbose=True)

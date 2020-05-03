@@ -62,7 +62,7 @@ def patch_gaussian(X,weights=None,eps=0.001,**kwargs):
         #eps*=np.maximum(np.trace(conv,axis1=-1,axis2=-2),0.01) #trace norm regularization
         pass
     elif stage_name=='region':
-        #eps*=np.trace(conv,axis1=-1,axis2=-2) #seems no effect
+        #eps*=np.trace(conv,axis1=-1,axis2=-2) #seems no effect or no improvement?
         pass
     dets=(np.linalg.det(matrix_regularize(conv,eps))**(-1/(d+1)))[...,None,None]
     sP*=dets #patch gaussian matrix

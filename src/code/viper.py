@@ -2,9 +2,7 @@ import numpy as np
 import os.path
 from .lomo.lomo import load_data,get_hsv,get_siltp
 from .lomo.tools import getcwd
-from .salience.extractDescriptors import extractDescriptorsFromCam
-from .gog.gog import GOG
-from .gog.set_parameter import get_default_parameter
+from .salience import extractDescriptorsFromCam
 from .cprint import cprint,cprint_out
 from sklearn.decomposition import PCA
 
@@ -40,30 +38,35 @@ def pca_reduct_dim(probFea,galFea,n_components,W_file=None):
                           %(probEnergy,probFea.shape,galEnergy,galFea.shape))
     return probFea,galFea
 
-def get_lomo_viper(pca_n_components=None):
+def get_lomo_viper(pca_n_components=None,mask=None):
     '''return probe(632*26960,cam_a) and gallery(632*26960,cam_b) of VIPeR dataset's 
        LOMO descriptors, if pca_n_components!=None, e.g. 100, func will return probe
        (100,632) and gallery(100,632) after PCA'''
-    feat_file=os.path.join(cwd,'../../data/lomo_features_viper.npz')
+    if mask=='ellipse':
+        cprint_out('use ellipse mask!')
+        feat_file=os.path.join(cwd,'../../data/lomo_ellipse_features_viper.npz')
+    else:
+        feat_file=os.path.join(cwd,'../../data/lomo_features_viper.npz')
     if not os.path.exists(feat_file):
-        imgs=load_data(cam_a_dir)
+        imgs=load_data(cam_a_dir,mask)
         fea1=get_hsv(imgs)
         fea2=get_siltp(imgs,R=3)
         fea3=get_siltp(imgs,R=5)
         probe=np.hstack((fea1,fea2,fea3))
-        imgs=load_data(cam_b_dir)
+        imgs=load_data(cam_b_dir,mask)
         fea1=get_hsv(imgs)
         fea2=get_siltp(imgs,R=3)
         fea3=get_siltp(imgs,R=5)
         gallery=np.hstack((fea1,fea2,fea3))
         np.savez(feat_file,probe=probe,gallery=gallery)
     else:
-        print('viper lomo features have existed!')
+        cprint_out('viper lomo features have existed!',end=' ')
         data=np.load(feat_file)
         probe,gallery=data['probe'],data['gallery']
     if pca_n_components!=None:
         W_file=os.path.join(cwd,'../../data/lomo_features_viper_pca%d.npz'%pca_n_components)
         return pca_reduct_dim(probe,gallery,pca_n_components,W_file)
+    print('probe(lomo)%s, gallery(lomo)%s'%(str(probe.shape),str(gallery.shape)))
     return probe,gallery
 
 def get_salience_viper(pca_n_components=None):
@@ -72,36 +75,47 @@ def get_salience_viper(pca_n_components=None):
        get_lomo_viper'''
     feat_file=os.path.join(cwd,'../../data/salience_features_viper.npz')
     if not os.path.exists(feat_file):
+        print('probe...')
         probe=extractDescriptorsFromCam(cam_a_dir)[0].T
+        print('gallery...')
         gallery=extractDescriptorsFromCam(cam_b_dir)[0].T
         np.savez(feat_file,probe=probe,gallery=gallery)
     else:
-        print('viper salience features have existed!')
+        cprint_out('viper salience features have existed!',end=' ')
         data=np.load(feat_file)
         probe,gallery=data['probe'],data['gallery']
     if pca_n_components!=None:
         W_file=os.path.join(cwd,'../../data/salience_features_viper_pca%d.npz'%pca_n_components)
         return pca_reduct_dim(probe,gallery,pca_n_components,W_file)
+    print('probe(salience)%s, gallery(salience)%s'%(str(probe.shape),str(gallery.shape)))
     return probe,gallery
 
 def get_salience_patch_viper():
     '''get viper's salience features at patch-level'''
     feat_file=os.path.join(cwd,'../../data/salience_patch_features_viper.npz')
     if not os.path.exists(feat_file):
+        print('probe...')
         probe,nx,ny=extractDescriptorsFromCam(cam_a_dir,level='patch')
+        print('gallery...')
         gallery,*_=extractDescriptorsFromCam(cam_b_dir,level='patch')
         np.savez(feat_file,probe=probe,gallery=gallery,nx=nx,ny=ny)
     else:
-        print('viper salience patch features have existed!')
+        cprint_out('viper salience patch features have existed!')
         data=np.load(feat_file)
         probe,gallery,nx,ny=data['probe'],data['gallery'],data['nx'],data['ny']
     return probe,gallery,nx,ny
 
-def get_gog_viper():
+def get_gog_viper(mask=None):
     '''return probe(n*dim,cam_a) and gallery(n*dim,cam_b) of VIPeR dataset's GOG 
        descriptors'''
-    feat_file=os.path.join(cwd,'../../data/gog_features_viper.npz')
+    if mask=='ellipse':
+        cprint_out('use ellipse mask!')
+        feat_file=os.path.join(cwd,'../../data/gog_features_ellipse_viper.npz')
+    else:
+        feat_file=os.path.join(cwd,'../../data/gog_features_viper.npz')
     if not os.path.exists(feat_file):
+        from .gog.gog import GOG
+        from .gog.set_parameter import get_default_parameter
         dim=0
         param=get_default_parameter()
         param.ifweight=True
@@ -110,12 +124,12 @@ def get_gog_viper():
             param.lfparam.lf_type=i
             dim+=param.dimension
         cprint('Calc GoG of Probe...',fcolor='blue')
-        imgs=load_data(cam_a_dir) #probe
+        imgs=load_data(cam_a_dir,mask) #probe
         n=imgs.shape[-1]
         probe=np.zeros((n,dim))
         for i in range(n):
             if i%100==0:
-                cprint_out('%d/n'%i,end='\r')
+                cprint_out('%d/%d'%(i,n),end='\r')
             im=imgs[...,i]
             #feas=[]
             feas=np.zeros(dim)
@@ -129,12 +143,12 @@ def get_gog_viper():
             #probe[i,:]=np.hstack(feas)
             probe[i,:]=feas
         cprint('Calc GoG of Gallery...',fcolor='blue')
-        imgs=load_data(cam_b_dir) #gallery
+        imgs=load_data(cam_b_dir,mask) #gallery
         n=imgs.shape[-1]
         gallery=np.zeros((n,dim))
         for i in range(n):
             if i%100==0:
-                cprint_out('%d/n'%i,end='\r')
+                cprint_out('%d/%d'%(i,n),end='\r')
             im=imgs[...,i]
             #feas=[]
             feas=np.zeros(dim)

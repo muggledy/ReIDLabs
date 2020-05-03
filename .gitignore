@@ -1,5 +1,6 @@
-/src/code/lomo/
-/src/code/salience/
+/src/code/segment/rc_region/*
+!/src/code/segment/rc_region/rc_region.pyx
+!/src/code/segment/rc_region/setup.py
 /images/*
 !/images/VIPeR.v1.0/
 !/images/.gitkeep

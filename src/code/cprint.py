@@ -7,7 +7,7 @@ from functools import partial
 
 __all__ = ['cprint', 'cprint_out', 'cprint_err', 'cprint_in', '__STDOUT__', '__STDERR__', '__STDIN__']
 
-# This code forked from: https://blog.csdn.net/wy_97/article/details/79663014
+# This code modified from: https://blog.csdn.net/wy_97/article/details/79663014
 
 STD_INPUT_HANDLE = -10
 STD_OUTPUT_HANDLE = -11

@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 from .lomo.tools import calc_cmc
 from functools import reduce
 
@@ -23,18 +24,19 @@ def norm_labels(labels):
         ret[np.where(labels==e)]=i
     return ret
 
-def shuffle_before_cmc(dist,ylabels,xlabels):
+def shuffle_before_cmc(dist,ylabels,xlabels,seed=None): #deprecated
     '''dist's horizonital axis corresponds to ylabels and vertical axis 
        corresponds to xlabels. we will shuffle the order of probe and 
        gallery, and normalize the labels simultaneously because function 
        calc_cmc in lomo.tools.py doesn't normalize the labels(it may 
-       cause index error), so it's better to do this op before calc cmc. 
-       Why shuffle? to prevent one error in CMDL'''
+       cause index error), so it's better to do this op before calc cmc'''
     yn=np.array(ylabels).shape[0]
     xn=np.array(xlabels).shape[0]
     if dist.shape!=(xn,yn):
         raise ValueError \
             ('dist\'s shape must be equal to (len(xlabels),len(ylabels))!')
+    if seed!=None:
+        np.random.seed(seed) #shuffle samely with the same seed
     ind=np.arange(xn)
     np.random.shuffle(ind)
     dist=dist[ind,:]
@@ -77,3 +79,36 @@ def seek_good_coeffi(dists,pLabels,gLabels,numRank=100,step=0.01):
             max_rank1=rank1
             max_coeffi=e
     return max_coeffi,max_rank1
+
+def create_ellipse_mask(shape):
+    '''create an ellipse mask(one channel) with arg shape(h,w), h//2 
+       and w//2 represent the length of ellipse's two axises'''
+    h,w=shape
+    ret=np.zeros(shape)
+    cv2.ellipse(ret,(w//2,h//2),(w//2,h//2),0,0,360,(255,255,255),-1)
+    return ret.astype('uint8')
+
+def sym_matric(x):
+    '''create a randn symmetric matric defaultly with shape(x,x). Or 
+       you can give half data(x, a list) with length (1+n)*n/2, also 
+       you can pass a square matric, we will copy its upper triangle'''
+    if isinstance(x,int):
+        M=np.random.randn(x,x)
+    elif isinstance(x,list):
+        t=np.sqrt(len(x)*2)
+        n=int(np.floor(t))
+        if n*(n+1)/2!=len(x):
+            raise ValueError \
+                ('x\'s length must be subjected to (1+n)*n/2=len(x)!')
+        else:
+            M=np.zeros((n,n))
+            indx,indy=np.triu_indices(n)
+            M[indx,indy]=x
+    elif isinstance(x,np.ndarray) and len(x.shape)==2 \
+                  and x.shape[0]==x.shape[1]:
+        M=x
+    else:
+        raise ValueError('x must be square matric!')
+    Mt=np.triu(M)
+    Mt+=Mt.T-np.diag(Mt.diagonal())
+    return Mt
