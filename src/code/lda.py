@@ -46,9 +46,10 @@ def lda(X,labels,n_components=None,regularizer=None):
        eigen vectors as the linear project matrix, c is the num of identity-class. 
        As usual, n_components must be less than c-1, regularizer can be 0.01'''
     Hw,Hb,_=get_Hw_Hb_Ht(X,labels)
+    c=len(np.unique(labels))
     Sw=Hw.dot(Hw.T)
     Sb=Hb.dot(Hb.T)
-    eigVals,eigVects=np.linalg.eig(np.linalg.inv(Sw+(np.eye(d)*regularizer if regularizer!=None else 0)).dot(Sb))
+    eigVals,eigVects=np.linalg.eig(np.linalg.inv(Sw+(np.eye(X.shape[0])*regularizer if regularizer!=None else 0)).dot(Sb))
     maxSortedInd=np.argsort(eigVals)[::-1][:c-1 if n_components==None else n_components]
     return eigVects[:,maxSortedInd]
 

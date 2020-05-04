@@ -53,7 +53,7 @@ for i in range(numFlods):
     half=int(numClass/2)
     probFea1=probFea[:,p[:half]]
     galFea1=galFea[:,p[:half]]
-    L,K=kolda(np.hstack((probFea1,galFea1)),p[:half].tolist()*2,kernel='linear',sigma=1)
+    L,K=kolda(np.hstack((probFea1,galFea1)),p[:half].tolist()*2,kernel='gaussian',sigma=1)
     probFea2=probFea[:,p[half:]]
     galFea2=galFea[:,p[half:]]
     dist=euc_dist(L.T.dot(K(probFea2)),L.T.dot(K(galFea2)))
