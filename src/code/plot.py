@@ -25,7 +25,7 @@ def plot_dataset(X,identity_labels,camera_labels=None,method='PCA',dim=2):
         camera_labels=np.zeros(len(identity_labels))
     else:
         camera_labels=norm_labels(camera_labels)
-    camera_markers=['.','^','s','*','+','D','x','1'] #8 preset camera tags, so 8 is 
+    camera_markers=['+','^','.','*','s','D','x','1'] #8 preset camera tags, so 8 is 
                                                      #the maximum num of cameras
     identity_colors=cm.gist_rainbow(Normalize(0,1)(np.linspace(0,1, \
                                                    np.max(identity_labels)+1))) 

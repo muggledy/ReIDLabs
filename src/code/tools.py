@@ -24,7 +24,7 @@ def norm_labels(labels):
         ret[np.where(labels==e)]=i
     return ret
 
-def shuffle_before_cmc(dist,ylabels,xlabels,seed=None): #deprecated
+def shuffle_before_cmc(dist,ylabels,xlabels,seed=None): #deprecated! no help
     '''dist's horizonital axis corresponds to ylabels and vertical axis 
        corresponds to xlabels. we will shuffle the order of probe and 
        gallery, and normalize the labels simultaneously because function 
@@ -112,3 +112,119 @@ def sym_matric(x):
     Mt=np.triu(M)
     Mt+=Mt.T-np.diag(Mt.diagonal())
     return Mt
+
+def norm1_dist(X,Y):
+    '''dist[i,j]=||x[:,i]-y[:,j]||_1'''
+    return np.sum(np.abs(X[:,:,None]-Y[:,None,:]),axis=0)
+
+def cosine_dist(X,Y):
+    '''calc cosine dist of X[:,i] and Y[:,j], i.e. dist[i,j], with range 
+       [0,2], dist value 0 means the most similar and dist value 2 means 
+       the most dissimilar'''
+    similarity=X.T.dot(Y)/(np.sqrt(np.sum(X**2,axis=0))[:,None]* \
+                                         np.sqrt(np.sum(Y**2,axis=0)))
+    return 1-similarity
+
+def construct_I(size,d):
+    '''return a block matrix where each block is an identity matrix(d,d), 
+       so the return's size may be (size[0]*d,size[1]*d)'''
+    I=np.zeros((size[0]*d,size[1]*d))
+    for i in range(size[0]): #do you have any other good method? I don't like for-loop
+        for j in range(size[1]):
+            I[i*d:(i+1)*d,j*d:(j+1)*d]=np.eye(d)
+    return I
+
+def norm_labels_simultaneously(*labels):
+    '''e.g. work for calc_cmc, in this case we want to normalize labels 
+       for probe and gallery simultaneously, it maybe false if you norm 
+       separately'''
+    t=np.cumsum(np.array([len(i) for i in labels][:-1]))
+    ret=norm_labels(np.hstack(labels))
+    return np.split(ret,t)
+
+def evaluate_with_index(sorted_similarity_index, right_result_index, junk_result_index=None):
+    """calculate cmc curve and Average Precision for a single query with index
+    :param sorted_similarity_index: index of all returned items. typically get with
+        function `np.argsort(similarity)`
+    :param right_result_index: index of right items. such as items in gallery
+        that have the same id but different camera with query
+    :param junk_result_index: index of junk items. such as items in gallery
+        that have the same camera and id with query
+    :return: single cmc, Average Precision
+    :note: this demo comes from 
+    https://wrong.wang/blog/20190223-reid%E4%BB%BB%E5%8A%A1%E4%B8%AD%E7%9A%84cmc%E5%92%8Cmap/
+    """
+    # initial a numpy array to store the AccK(like [0, 0, 0, 1, 1, ...,1]).
+    cmc = np.zeros(len(sorted_similarity_index))
+    ap = 0.0
+
+    if len(right_result_index) == 0:
+        cmc[0] = -1
+        return cmc, ap
+    if junk_result_index is not None:
+        # remove junk_index
+        # all junk_result_index in sorted_similarity_index has been removed.
+        # for example:
+        # (sorted_similarity_index, junk_result_index)
+        # ([3, 2, 0, 1, 4],         [0, 1])             -> [3, 2, 4]
+        need_remove_mask = np.in1d(sorted_similarity_index, junk_result_index, invert=True)
+        sorted_similarity_index = sorted_similarity_index[need_remove_mask]
+
+    mask = np.in1d(sorted_similarity_index, right_result_index)
+    right_index_location = np.argwhere(mask == True).flatten()
+
+    # [0,0,0,...0, 1,1,1,...,1]
+    #              |
+    #  right answer first appearance
+    cmc[right_index_location[0]:] = 1
+
+    for i in range(len(right_result_index)):
+        precision = float(i + 1) / (right_index_location[i] + 1)
+        if right_index_location[i] != 0:
+            # last rank precision, not last match precision
+            old_precision = float(i) / (right_index_location[i])
+        else:
+            old_precision = 1.0
+        ap = ap + (1.0 / len(right_result_index)) * (old_precision + precision) / 2
+
+    return cmc, ap
+
+def get_right_and_junk_index(query_label, gallery_labels, query_camera_label=None, \
+                             gallery_camera_labels=None):
+    '''same origin with func evaluate_with_index'''
+    same_label_index = np.argwhere(gallery_labels == query_label)
+    if (query_camera_label is not None) and (gallery_camera_labels is not None):
+        same_camera_label_index = np.argwhere(gallery_camera_labels == query_camera_label)
+        # the index of mis-detected images, which contain the body parts.
+        junk_index1 = np.argwhere(gallery_labels == -1)
+        # find index that are both in query_index and camera_index
+        # the index of the images, which are of the same identity in the same cameras.
+        junk_index2 = np.intersect1d(same_label_index, same_camera_label_index)
+        junk_index = np.append(junk_index2, junk_index1)
+
+        # find index that in query_index but not in camera_index
+        # which means the same lable but different camera
+        right_index = np.setdiff1d(same_label_index, \
+                      same_camera_label_index, assume_unique=True)
+        return right_index, junk_index
+    else:
+        return same_label_index, None
+
+def calc_cmc_map(dist,prob_identities,gal_identities,prob_id_views,gal_id_views):
+    '''dist's vertical axis indicates gal and horizontal prob. Same origin with 
+       func evaluate_with_index'''
+    gal_n,prob_n=dist.shape
+    similarity=-dist
+    total_cmc = np.zeros(gal_n)
+    total_average_precision = 0.0
+    for i in range(prob_n):
+        cmc, ap = evaluate_with_index(np.argsort(similarity[:,i])[::-1],
+                  *get_right_and_junk_index(prob_identities[i], gal_identities, \
+                  prob_id_views[i], gal_id_views))
+
+        if cmc[0] == -1:
+            continue
+        total_cmc += cmc
+        total_average_precision += ap
+
+    return total_cmc / prob_n, total_average_precision / prob_n
