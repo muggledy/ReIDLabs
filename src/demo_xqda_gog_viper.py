@@ -1,7 +1,7 @@
 '''
-Rank1 preserves to be 35% on VIPeR with official arguments in 
-paper(49%), i don't know if it is my problem and if 49% is a 
-stable value
+Rank1 preserves to be 45% on VIPeR with official arguments in 
+paper(49%), i don't know if it is my problem or if 49% is a 
+unstable value
 '''
 
 from code.viper import get_gog_viper

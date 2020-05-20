@@ -9,7 +9,7 @@ from code.viper import get_gog_viper,get_lomo_viper,get_salience_viper
 from code.lomo.xqda import xqda
 from code.lomo.tools import mah_dist,calc_cmc,plot_cmc
 from code.gog.utils import normalize
-from code.tools import shuffle_before_cmc,seek_good_coeffi
+from code.tools import seek_good_coeffi
 import numpy as np
 import time
 
@@ -29,12 +29,9 @@ galFeaSALIENCE=gallery.T
 
 numClass = 632
 numRank=100
-numFolds=1
+numFolds=2
 
-cFUSION=[]
-cGOG=[]
-cLOMO=[]
-cSALIENCE=[]
+cFUSION,cGOG,cLOMO,cSALIENCE=[],[],[],[]
 
 #coeffis=[] #uncomment directly to seek good trade-off coefficient
 
@@ -58,21 +55,23 @@ for i in range(numFolds):
     galFeaGOG2=galFeaGOG[:,p[half:]]
     distGOG=mah_dist(MGOG,(WGOG.T).dot(probFeaGOG2),(WGOG.T).dot(galFeaGOG2))
     distGOG=distGOG/np.linalg.norm(distGOG,'fro') #normalize, see in CMDL
-    cGOG.append(calc_cmc(*shuffle_before_cmc(distGOG.T,np.arange(half),np.arange(half)),numRank))
+    cGOG.append(calc_cmc(distGOG.T,np.arange(half),np.arange(half),numRank))
 
     probFeaLOMO2=probFeaLOMO[:,p[half:]]
     galFeaLOMO2=galFeaLOMO[:,p[half:]]
     distLOMO=mah_dist(MLOMO,(WLOMO.T).dot(probFeaLOMO2),(WLOMO.T).dot(galFeaLOMO2))
     distLOMO=distLOMO/np.linalg.norm(distLOMO,'fro')
-    cLOMO.append(calc_cmc(*shuffle_before_cmc(distLOMO.T,np.arange(half),np.arange(half)),numRank))
+    cLOMO.append(calc_cmc(distLOMO.T,np.arange(half),np.arange(half),numRank))
 
     probFeaSALIENCE2=probFeaSALIENCE[:,p[half:]]
     galFeaSALIENCE2=galFeaSALIENCE[:,p[half:]]
-    distSALIENCE=mah_dist(MSALIENCE,(WSALIENCE.T).dot(probFeaSALIENCE2),(WSALIENCE.T).dot(galFeaSALIENCE2))
+    distSALIENCE=mah_dist(MSALIENCE,(WSALIENCE.T).dot(probFeaSALIENCE2), \
+        (WSALIENCE.T).dot(galFeaSALIENCE2))
     distSALIENCE=distSALIENCE/np.linalg.norm(distSALIENCE,'fro')
-    cSALIENCE.append(calc_cmc(*shuffle_before_cmc(distSALIENCE.T,np.arange(half),np.arange(half)),numRank))
+    cSALIENCE.append(calc_cmc(distSALIENCE.T,np.arange(half),np.arange(half),numRank))
 
-    c=calc_cmc(*shuffle_before_cmc((0.55*distGOG+0.3*distLOMO+0.15*distSALIENCE).T,np.arange(half),np.arange(half)),numRank)
+    c=calc_cmc((0.55*distGOG+0.3*distLOMO+0.15*distSALIENCE).T,np.arange(half), \
+        np.arange(half),numRank)
     cFUSION.append(c)
 
     #coeffi=seek_good_coeffi([distGOG.T,distLOMO.T,distSALIENCE.T],np.arange(half),np.arange(half))
@@ -88,4 +87,5 @@ print(cFUSION_mean)
 #print('good fusion coefficients:')
 #print(np.mean(np.array(coeffis),axis=0))
 print('time consumes:',time.time()-t1)
-plot_cmc(np.array([cFUSION_mean,cGOG_mean,cLOMO_mean,cSALIENCE_mean]),['fusion(viper)','GOG(viper)','LOMO(viper)','SALIENCE(viper)'],verbose=True)
+plot_cmc(np.array([cFUSION_mean,cGOG_mean,cLOMO_mean,cSALIENCE_mean]), \
+    ['fusion(viper)','GOG(viper)','LOMO(viper)','SALIENCE(viper)'],verbose=True)

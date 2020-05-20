@@ -24,29 +24,6 @@ def norm_labels(labels):
         ret[np.where(labels==e)]=i
     return ret
 
-def shuffle_before_cmc(dist,ylabels,xlabels,seed=None): #deprecated! no help
-    '''dist's horizonital axis corresponds to ylabels and vertical axis 
-       corresponds to xlabels. we will shuffle the order of probe and 
-       gallery, and normalize the labels simultaneously because function 
-       calc_cmc in lomo.tools.py doesn't normalize the labels(it may 
-       cause index error), so it's better to do this op before calc cmc'''
-    yn=np.array(ylabels).shape[0]
-    xn=np.array(xlabels).shape[0]
-    if dist.shape!=(xn,yn):
-        raise ValueError \
-            ('dist\'s shape must be equal to (len(xlabels),len(ylabels))!')
-    if seed!=None:
-        np.random.seed(seed) #shuffle samely with the same seed
-    ind=np.arange(xn)
-    np.random.shuffle(ind)
-    dist=dist[ind,:]
-    xlabels=norm_labels(xlabels[ind])
-    ind=np.arange(yn)
-    np.random.shuffle(ind)
-    dist=dist[:,ind]
-    ylabels=norm_labels(ylabels[ind])
-    return dist,ylabels,xlabels
-
 def range2(start,end,step):
     cur=start
     while cur<=end:

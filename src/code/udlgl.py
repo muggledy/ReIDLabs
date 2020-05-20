@@ -13,16 +13,17 @@ from .cprint import cprint_out,cprint_err
 from itertools import count
 from functools import reduce
 from scipy.linalg import solve_sylvester
+from scipy.stats import ortho_group
 
 def max_knn(D,k):
-    '''salient D's maximum k elements according to axis 1'''
+    '''salient D's maximum k elements according to axis 1(horizon)'''
     ret=np.zeros(D.shape)
     sort_inds=np.argsort(D,axis=1)[:,::-1]
     sal_inds=(np.broadcast_to(np.arange(D.shape[0])[:,None],(D.shape[0],k)),sort_inds[:,:k])
     ret[sal_inds]=D[sal_inds]
     return ret
 
-def get_cross_view_graph(*X,k=5):
+def get_cross_view_graph(*X,k=5,**kwargs):
     '''construct soft cross-view correspondence relationship matric W, more precisely, if x_i is 
        among the k-nearest neighbours of y_j or vice versa, W_{i,j}=cosine_dist(x_i,y_j), else 
        w_{i,j}=0. X is a set, each of which represents all samples coming from one camera'''
@@ -33,9 +34,12 @@ def get_cross_view_graph(*X,k=5):
     t=np.cumsum([0]+[i.shape[1] for i in X])
     W=np.zeros((t[-1],t[-1]))
     for i,j in zip(x,y):
-       dist=1-cosine_dist(X[i],X[j]) #
-       d1=max_knn(dist,k)
-       d2=max_knn(dist.T,k)
+       simi=1-cosine_dist(X[i],X[j])
+       d2=max_knn(simi.T,k)
+       if kwargs.get('backdoor')==True:
+           d1=d2 #same as source code of laplacianL2, but it is not reasonable
+       else:
+           d1=max_knn(simi,k) #this should be right! but result(rank1 of cmc) may decline
        W[t[i]:t[i+1],t[j]:t[j+1]]=(d1+d2.T)/2
     W=sym_matric(W) #we don't consider intra-view relationship, just set them as zero
     W[(W<0.5)&(W!=0)]=0.0001 #remove noise from the graph
@@ -47,8 +51,9 @@ def opt_W_lambd2(Y,k,lambd2):
     d=norm1_dist(Y,Y)/(2*lambd2)
     d_=np.sort(d,axis=0)
     W=np.maximum(((1+np.sum(d_[:k,:],axis=0))/k)[None,:]-d,0)
-    W=sym_matric(W)
-    lambd2=np.sum((k/2)*d[:,[k]]-(0.5*np.sum(d[:,:k],axis=1)[:,None]))/(Y.shape[1])
+    #W=sym_matric(W)
+    W=(W+W.T)/2
+    lambd2=np.sum((k/2)*d[k,:]-(0.5*np.sum(d[:k,:],axis=1)[:,None]))/(Y.shape[1])
     return W,lambd2
 
 def calc_Aw(W):
@@ -76,11 +81,13 @@ def udlgl(*X,k,lambd1,lambd2,gamma,nBasis,rho):
        print('update D...')
        D=opt_dict(np.hstack(X),Y)
        print('update Y...')
-       Y=solve_sylvester(D.T.dot(D),gamma*Aw.dot(Aw.T),D.T.dot(np.hstack(X))+gamma*U.dot(Aw.T)+F.dot(Aw.T))
+       Y=solve_sylvester(np.nan_to_num(D.T.dot(D)),np.nan_to_num(gamma*Aw.dot(Aw.T)),np.nan_to_num(D.T.dot(np.hstack(X))+gamma*U.dot(Aw.T)+F.dot(Aw.T))) #np.nan_to_num
        print('update U...')
        U=opt_soft_threshold(Y.dot(Aw)-F/gamma,lambd1/gamma)
        print('update W...')
        W,lambd2=opt_W_lambd2(Y,k,lambd2)
-       F+=(gamma*(U-Y.dot(Aw)))
+       print(U.dtype,Y.dtype,Aw.dtype)
+       F+=(gamma*(U.real-Y.real.dot(Aw.real)))
        gamma*=rho
+       Aw=calc_Aw(W)
     return D
