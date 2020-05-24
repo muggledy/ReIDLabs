@@ -2,6 +2,9 @@
 This method(unsupervised dictionary learning with graph laplacian L1 regularization, see ./code/udlgl.py) 
 use features in [1], you can download from [2](VIPeR_split.mat), then put in ../data/, test with XQDA we 
 get rank-1 34.15%(10 iters)
+2020/5/21
+I can't reproduce the paper, Rank-1 has only 20%, unfortunately, the authors of the paper did not reply, 
+but i need help indeed
 see author's web page: https://sites.google.com/site/elyorkodirovresearch/publications
 References:
 [1] Giuseppe Lisanti et al., Matching People across Camera Views using Kernel Canonical Correlation 
@@ -14,9 +17,9 @@ import os.path
 import scipy.io as sio
 from code.lomo.xqda import xqda
 from code.lomo.tools import mah_dist,calc_cmc,plot_cmc
-from code.tools import cosine_dist,norm_labels_simultaneously
+from code.tools import cosine_dist,norm_labels_simultaneously,print_cmc
 from code.optimize import opt_coding_l2
-from code.udlgl import udlgl
+from code.udlgl import udlgl,get_cross_view_graph
 
 def get_data(trial=0,dataset='viper'):
     file_path=os.path.join(os.path.dirname(__file__),'../data/%s_split.mat'%dataset)
@@ -61,18 +64,29 @@ def get_data(trial=0,dataset='viper'):
 
 if __name__=='__main__':
     cs=[]
-    lambd=0.001 #
+    lambd=1 #
+    k=5
     for trial in range(0,10):
         data=get_data(trial)
         probFea1,galFea1=data['trainA_feats'],data['trainB_feats']
+        probFea1,galFea1=probFea1[:,np.random.permutation(probFea1.shape[1])], \
+            galFea1[:,np.random.permutation(galFea1.shape[1])] #verify: shuffle samples' order won't affect result
         probFea2,galFea2=data['testA_feats'],data['testB_feats']
 
-        D=udlgl(probFea1,galFea1,k=5,lambd1=1,lambd2=1,gamma=0.1,nBasis=None,rho=1.4)
+        for in_iter in range(1):
+            if in_iter==0:
+                W=None
+            else:
+                W=get_cross_view_graph(opt_coding_l2(D,probFea1,lambd), \
+                    opt_coding_l2(D,galFea1,lambd),k=k,backdoor=False) #i don't know if we need to update W manually, 
+                                                                       #just like in laplacian l2
+            D=udlgl(probFea1,galFea1,k=k,lambd1=1,lambd2=1,gamma=0.1,nBasis=None,rho=1.4,max_iter=1,W_init=W)
+
         dist=cosine_dist(opt_coding_l2(D,probFea2,lambd),opt_coding_l2(D,galFea2,lambd))
         c=calc_cmc(dist.T,*norm_labels_simultaneously(data['testA_labels'][0],data['testB_labels'][0]),100)
         cs.append(c)
         break
     c_mean=np.mean(cs,axis=0)
     print('CMC:')
-    print(c_mean)
+    print_cmc(c_mean,color=True)
     plot_cmc(c_mean,['viper'],verbose=True)

@@ -16,6 +16,57 @@ from code.udlgl import get_cross_view_graph
 from code.optimize import opt_coding_l2
 from code.lomo.tools import calc_cmc,plot_cmc
 from code.tools import cosine_dist
+from code.graph_sc import graph_sc
+
+cur_dir=os.path.dirname(__file__)
+data=scio.loadmat(os.path.join(cur_dir,'../data/VIPeR_data_trial_1.mat'))
+
+k_nn=3
+nBasis=2**8
+alpha=1.0
+beta=0.0001
+nIters=50
+
+print('Stage1: Train')
+for out_iter in range(2):
+    print('Iter: %d'%out_iter)
+    if out_iter==0:
+        X1=data['Cam_A_tr']
+        X2=data['Cam_B_tr']
+    elif out_iter==1:
+        print('use the learned samples\' coding this time')
+        X1=train_a_after_D.T
+        X2=train_b_after_D.T
+    
+    print('1. construct graph(W) similarity matrix ...')
+    W_full=get_cross_view_graph(X1.T,X2.T,k=k_nn,backdoor=True)
+
+    print('2. learn dictionary(D) with L1 laplacian ...')
+    D,*_=graph_sc(np.vstack((data['Cam_A_tr'],data['Cam_B_tr'])).T, W_full, nBasis, alpha, beta, nIters)
+
+    lambd1=0.04 #this parametr must be tuned
+    train_a_after_D=opt_coding_l2(D,data['Cam_A_tr'].T,lambd1)
+    train_b_after_D=opt_coding_l2(D,data['Cam_B_tr'].T,lambd1)
+    # break
+print('Stage2: Test')
+test_a_after_D=opt_coding_l2(D,data['Cam_A_te'],lambd1)
+test_b_after_D=opt_coding_l2(D,data['Cam_B_te'],lambd1)
+
+dist=cosine_dist(test_a_after_D,test_b_after_D)
+print('calc CMC ...')
+c=calc_cmc(dist.T,np.arange(316),np.arange(316),100)
+print(c)
+#print(calc_cmc(dist,np.arange(316),np.arange(316),100)[[0,4,9,19]])
+plot_cmc(c,['viper'],verbose=True)
+
+'''CALL MATLAB
+import scipy.io as scio
+import numpy as np
+import os
+from code.udlgl import get_cross_view_graph
+from code.optimize import opt_coding_l2
+from code.lomo.tools import calc_cmc,plot_cmc
+from code.tools import cosine_dist
 from importlib import reload
 
 cur_dir=os.path.dirname(__file__)
@@ -74,3 +125,4 @@ c=calc_cmc(dist.T,np.arange(316),np.arange(316),100)
 print(c) #25.31%
 #print(calc_cmc(dist,np.arange(316),np.arange(316),100)[[0,4,9,19]]) #31.65%
 plot_cmc(c,['viper'],verbose=True)
+'''

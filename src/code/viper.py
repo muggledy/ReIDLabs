@@ -166,5 +166,5 @@ def get_gog_viper(mask=None):
         cprint_out('viper gog features have existed!',end=' ')
         data=np.load(feat_file)
         probe,gallery=data['probe'],data['gallery']
-    cprint_out('probe(gog)%s, gallery(gog)%s'%(str(probe.shape),str(gallery.shape)))
+    print('probe(gog)%s, gallery(gog)%s'%(str(probe.shape),str(gallery.shape)))
     return probe,gallery

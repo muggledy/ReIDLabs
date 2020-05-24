@@ -5,13 +5,13 @@ in spite of its' error in part-level. I mean two image-level fusion may not be g
 just maybe. I added salience later with the same conclusion
 '''
 
+import numpy as np
+import time
 from code.viper import get_gog_viper,get_lomo_viper,get_salience_viper
 from code.lomo.xqda import xqda
 from code.lomo.tools import mah_dist,calc_cmc,plot_cmc
 from code.gog.utils import normalize
 from code.tools import seek_good_coeffi
-import numpy as np
-import time
 
 t1=time.time()
 probe,gallery=get_gog_viper()
@@ -29,13 +29,12 @@ galFeaSALIENCE=gallery.T
 
 numClass = 632
 numRank=100
-numFolds=2
 
 cFUSION,cGOG,cLOMO,cSALIENCE=[],[],[],[]
 
 #coeffis=[] #uncomment directly to seek good trade-off coefficient
 
-for i in range(numFolds):
+for i in range(2):
     p=np.random.permutation(numClass)
     half=int(numClass/2)
 

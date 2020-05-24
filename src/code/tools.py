@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 from .lomo.tools import calc_cmc
+from .cprint import cprint,fcolors
 from functools import reduce
 
 def euc_dist(X,Y):
@@ -205,3 +206,15 @@ def calc_cmc_map(dist,prob_identities,gal_identities,prob_id_views,gal_id_views)
         total_average_precision += ap
 
     return total_cmc / prob_n, total_average_precision / prob_n
+
+def print_cmc(cmc,s=[1,5,10,20,100],color=False):
+    t=['Rank-%d:%.2f%%'%(i,cmc[i-1]*100) for i in s]
+    flag=True if len(s)<len(fcolors) else False
+    if color:
+        for i,e in enumerate(t):
+            f,b=e.split(':')
+            cprint('%s:'%f,fcolor='white',end='')
+            cprint(b,fcolor=(fcolors[i] if flag else 'blue'),end=' ')
+        print()
+    else:
+        print(' '.join(t))

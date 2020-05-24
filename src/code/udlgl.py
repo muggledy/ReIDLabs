@@ -8,8 +8,9 @@ muggledy 2020/5/4
 
 import numpy as np
 from .tools import cosine_dist,sym_matric,norm1_dist
-from .optimize import opt_dict,opt_soft_threshold
+from .optimize import opt_soft_threshold
 from .cprint import cprint_out,cprint_err
+from .graph_sc import learn_dict
 from itertools import count
 from functools import reduce
 from scipy.linalg import solve_sylvester
@@ -37,9 +38,10 @@ def get_cross_view_graph(*X,k=5,**kwargs):
        simi=1-cosine_dist(X[i],X[j])
        d2=max_knn(simi.T,k)
        if kwargs.get('backdoor')==True:
-           d1=d2 #same as source code of laplacianL2, but it is not reasonable
+           d1=d2 #same as source code of laplacianL2, but it is 
+                 #not reasonable and may cause shape mismatch error!
        else:
-           d1=max_knn(simi,k) #this should be right! but result(rank1 of cmc) may decline
+           d1=max_knn(simi,k) #this(I) should be right!
        W[t[i]:t[i+1],t[j]:t[j+1]]=(d1+d2.T)/2
     W=sym_matric(W) #we don't consider intra-view relationship, just set them as zero
     W[(W<0.5)&(W!=0)]=0.0001 #remove noise from the graph
@@ -51,43 +53,51 @@ def opt_W_lambd2(Y,k,lambd2):
     d=norm1_dist(Y,Y)/(2*lambd2)
     d_=np.sort(d,axis=0)
     W=np.maximum(((1+np.sum(d_[:k,:],axis=0))/k)[None,:]-d,0)
-    #W=sym_matric(W)
-    W=(W+W.T)/2
+    W=sym_matric(W)
+    #W=(W+W.T)/2
     lambd2=np.sum((k/2)*d[k,:]-(0.5*np.sum(d[:k,:],axis=1)[:,None]))/(Y.shape[1])
     return W,lambd2
 
 def calc_Aw(W):
     Lw=np.diag(np.sum(W,axis=1))-W
     Sw,Uw=np.linalg.eig(Lw) #Lw=Uw·Sw·Uwᵀ
-    Aw=Uw.dot(np.diag(np.sqrt(Sw)))
+    #Aw=Uw.dot(np.diag(np.sqrt(Sw)))
+    Aw=Uw.dot(np.diag(Sw)) #?
     return Aw
 
-def udlgl(*X,k,lambd1,lambd2,gamma,nBasis,rho):
+def calc_obj(X,D,Y,U,F,Aw,W,lambd1,lambd2,gamma):
+   return 0.5*np.sum((X-D.dot(Y))**2)+lambd1*np.sum(np.abs(U))+ \
+      np.trace(F.T.dot(U-Y.dot(Aw)))+gamma/2*np.sum((U-Y.dot(Aw))**2)+lambd2*np.sum(W**2)
+
+def udlgl(*X,k,lambd1,lambd2,gamma,nBasis,rho,max_iter,W_init=None):
     '''Unsupervised ℓ1 Graph dict Learning'''
     X=[i.astype('float32') for i in X]
     n=reduce(lambda x,y:x+y,[int(i.shape[1]) for i in X]) #num of samples from all cameras
-    d=X[0].shape[0] #dim of sample
-    W=get_cross_view_graph(*X,k=k)
-    nBasis=2**8 if nBasis==None else nBasis
-    Y=np.random.randn(nBasis,n)
+    W=get_cross_view_graph(*X,k=k,backdoor=False) if W_init is None else W_init
     Aw=calc_Aw(W)
-    U=Y.dot(Aw)
-    F=np.random.randn(Y.shape[0],Aw.shape[1])
-    max_iter=50
+    nBasis=2**9 if nBasis==None else nBasis
+    Y=np.random.rand(nBasis,n)
+    #U=Y.dot(Aw)
+    U=np.random.rand(nBasis,Aw.shape[1])
+    F=np.random.rand(nBasis,Aw.shape[1])
     for i in count():
        if i>=max_iter:
           cprint_err('Udlgl max iter(%d)!'%max_iter)
           break
        print('update D...')
-       D=opt_dict(np.hstack(X),Y)
+       D=learn_dict(np.hstack(X),Y)
        print('update Y...')
        Y=solve_sylvester(np.nan_to_num(D.T.dot(D)),np.nan_to_num(gamma*Aw.dot(Aw.T)),np.nan_to_num(D.T.dot(np.hstack(X))+gamma*U.dot(Aw.T)+F.dot(Aw.T))) #np.nan_to_num
+       #Y=solve_sylvester(D.T.dot(D),gamma*Aw.dot(Aw.T),D.T.dot(np.hstack(X))+gamma*U.dot(Aw.T)+F.dot(Aw.T))
        print('update U...')
        U=opt_soft_threshold(Y.dot(Aw)-F/gamma,lambd1/gamma)
        print('update W...')
-       W,lambd2=opt_W_lambd2(Y,k,lambd2)
+       #W,lambd2=opt_W_lambd2(Y,k,lambd2)
+       W,_=opt_W_lambd2(Y,k,lambd2)
+       Aw=calc_Aw(np.nan_to_num(W))
        print(U.dtype,Y.dtype,Aw.dtype)
-       F+=(gamma*(U.real-Y.real.dot(Aw.real)))
+       #F+=(gamma*(U.real-Y.real.dot(Aw.real)))
+       F+=(gamma*(U-Y.dot(Aw)))
        gamma*=rho
-       Aw=calc_Aw(W)
+       print('obj:',calc_obj(np.hstack(X),D,Y,U,F,Aw,W,lambd1,lambd2,gamma))
     return D

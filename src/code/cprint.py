@@ -5,7 +5,7 @@
 import ctypes, sys
 from functools import partial
 
-__all__ = ['cprint', 'cprint_out', 'cprint_err', 'cprint_in', '__STDOUT__', '__STDERR__', '__STDIN__']
+__all__ = ['cprint', 'cprint_out', 'cprint_err', 'cprint_in', '__STDOUT__', '__STDERR__', '__STDIN__','fcolors','bcolors']
 
 # This code modified from: https://blog.csdn.net/wy_97/article/details/79663014
 
@@ -71,7 +71,7 @@ def cprint(*texts, fcolor = None, bcolor = None, **kwargs):
        Print Texts Colorfully
        
        Supported foreground color(arg fcolor): 
-          black, darkblue, darkgreen, darkskyblue, darkreed, darkpink, darkyellow, darkwhite, 
+          black, darkblue, darkgreen, darkskyblue, darkred, darkpink, darkyellow, darkwhite, 
           darkgray, blue, green, skyblue, red, pink, yellow, white
        Supported background color(arg bcolor):
           darkblue, darkgreen, darkskyblue, darkreed, darkpink, darkyellow, darkwhite, 
@@ -113,6 +113,11 @@ def cprint(*texts, fcolor = None, bcolor = None, **kwargs):
 cprint_out = partial(cprint, fcolor = 'green')
 cprint_err = partial(cprint, fcolor = 'white', bcolor = 'red', file = sys.stderr)
 cprint_in = partial(cprint, fcolor = 'blue', file = sys.stdin, end = ' ')
+
+fcolors=['red', 'blue', 'green', 'pink', 'yellow', 'darkred', 'darkblue', 'darkgreen', 'darkpink', 
+         'darkyellow', 'darkskyblue', 'darkwhite', 'skyblue', 'white', 'darkgray', 'black']
+bcolors=['darkblue', 'darkgreen', 'darkskyblue', 'darkreed', 'darkpink', 'darkyellow', 'darkwhite', 
+         'darkgray', 'blue', 'green', 'skyblue', 'red', 'pink', 'yellow', 'white']
 
 if __name__ == '__main__':
     cprint_out('Hi,', 'Muggledy!')
