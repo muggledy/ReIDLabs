@@ -218,3 +218,49 @@ def print_cmc(cmc,s=[1,5,10,20,100],color=False):
         print()
     else:
         print(' '.join(t))
+
+class CellMatrix2D:
+    '''cell=CellMatrix2D([2,3,4],[3,4,5])
+       print(cell[(0,0)])'''
+    def __init__(self,xticks,yticks,dtype=None):
+        self.data=np.zeros((sum(xticks),sum(yticks)),dtype=np.float32 if dtype==None else dtype)
+        self.xticks,self.yticks=xticks,yticks
+        self.xcum=np.cumsum([0,]+xticks)
+        self.ycum=np.cumsum([0,]+yticks)
+        
+    def __setitem__(self,pos,data):
+        s1,s2=self.get_slice(pos)
+        t=(self.xticks[pos[0]],self.yticks[pos[1]])
+        if data.shape!=t:
+            raise ValueError('data\'s shape must be %s!'%str(t))
+        self.data[s1,s2]=data
+        
+    def __getitem__(self,pos):
+        s1,s2=self.get_slice(pos)
+        return self.data[s1,s2]
+        
+    @property
+    def info(self):
+        if self.__info==None:
+            t=''
+            for i in self.xticks:
+                t_=''
+                for j in self.yticks:
+                    t_+=('(%s,%s) '%(format(i, '^3d'),format(j, '^3d')))
+                else:
+                    t_+='\n'
+                t+=t_
+            self.__info=t
+        return self.__info
+        
+    def __getattr__(self,name):
+        return None
+        
+    def get_slice(self,pos):
+        x,y=pos
+        tx=(len(self.xcum)-2)
+        ty=(len(self.ycum)-2)
+        if x>=0 and x<=tx and y>=0 and y<=ty:
+            return slice(self.xcum[x],self.xcum[x+1]),slice(self.ycum[y],self.ycum[y+1])
+        else:
+            raise ValueError('Invalid pos! x must be in range[0,%d], y must be in range[0,%d]!'%(tx,ty))
