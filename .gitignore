@@ -1,6 +1,3 @@
-/src/code/test/segment/rc_region/*
-!/src/code/test/segment/rc_region/rc_region.pyx
-!/src/code/test/segment/rc_region/setup.py
 /src/code/omp/*
 !/src/code/omp/__init__.py
 !/src/code/omp/batch_omp.pyx
@@ -15,5 +12,6 @@
 !/images/.gitkeep
 /data/*
 !/data/.gitkeep
+!/data/lda_data_demo.mat
 /.vscode/*
 **/__pycache__/
