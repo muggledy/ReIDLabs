@@ -1,3 +1,8 @@
+'''
+I can't implement the kernel version of olda correctly! Who can help me? I'll follow you and give you TEN yuan 
+if you can solve my problem（谁能救救我！）
+'''
+
 from code.viper import get_lomo_viper,get_gog_viper
 from code.lomo.tools import calc_cmc,plot_cmc
 from code.olda import olda,kolda
@@ -23,7 +28,6 @@ galFea=data[:,632:]
 '''
 
 # --Stage2: training and matching--
-
 numClass=632
 numFlods=1
 cs=[]
@@ -49,8 +53,7 @@ plot_dataset(np.hstack((L.T.dot(probFea1),L.T.dot(galFea1))),list(range(half))*2
 plot_dataset(np.hstack((L.T.dot(probFea2),L.T.dot(galFea2))),list(range(half))*2,[0]*half+[1]*half,'PCA',3) #see test data points
 ###
 
-
-#--kernel version(now has error!!!)--
+# --kernel version(now has error!!!)--
 # numClass=632
 # numFlods=1
 # cs=[]

@@ -100,7 +100,7 @@ def cosine_dist(X,Y):
        [0,2], dist value 0 means the most similar and dist value 2 means 
        the most dissimilar'''
     similarity=X.T.dot(Y)/(np.sqrt(np.sum(X**2,axis=0))[:,None]* \
-                                         np.sqrt(np.sum(Y**2,axis=0)))
+               np.sqrt(np.sum(Y**2,axis=0)))
     return 1-similarity
 
 def construct_I(size,d):

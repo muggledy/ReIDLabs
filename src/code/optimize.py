@@ -13,7 +13,7 @@ def opt_coding_l2(D,X,lambd):
     '''update y: min ||x-Dy||_2^2+λ||y||_2^2'''
     P=inv(D.T.dot(D)+lambd*np.eye(D.shape[1])).dot(D.T)
     Y=P.dot(X)
-    return Y
+    return Y,P
 
 def feature_sign_search(dictionary, signal, sparsity, solution=None):
     """

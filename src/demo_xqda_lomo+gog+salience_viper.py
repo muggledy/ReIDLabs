@@ -11,7 +11,7 @@ from code.viper import get_gog_viper,get_lomo_viper,get_salience_viper
 from code.lomo.xqda import xqda
 from code.lomo.tools import mah_dist,calc_cmc,plot_cmc
 from code.gog.utils import normalize
-from code.tools import seek_good_coeffi
+from code.tools import seek_good_coeffi,print_cmc
 
 t1=time.time()
 probe,gallery=get_gog_viper()
@@ -27,12 +27,12 @@ probe,gallery=get_salience_viper()
 probFeaSALIENCE=probe.T
 galFeaSALIENCE=gallery.T
 
-numClass = 632
+numClass=632
 numRank=100
 
 cFUSION,cGOG,cLOMO,cSALIENCE=[],[],[],[]
 
-#coeffis=[] #uncomment directly to seek good trade-off coefficient
+# coeffis=[] #uncomment directly to seek good trade-off coefficient
 
 for i in range(2):
     p=np.random.permutation(numClass)
@@ -73,18 +73,19 @@ for i in range(2):
         np.arange(half),numRank)
     cFUSION.append(c)
 
-    #coeffi=seek_good_coeffi([distGOG.T,distLOMO.T,distSALIENCE.T],np.arange(half),np.arange(half))
-    #coeffis.append(coeffi[0])
-    #print('the best trade-off coeffi:',coeffi)
+    # coeffi=seek_good_coeffi([distGOG.T,distLOMO.T,distSALIENCE.T], \
+    #     np.arange(half),np.arange(half))
+    # coeffis.append(coeffi[0])
+    # print('the best trade-off coeffi:',coeffi)
 
 cFUSION_mean=np.mean(np.array(cFUSION),axis=0)
 cGOG_mean=np.mean(np.array(cGOG),axis=0)
 cLOMO_mean=np.mean(np.array(cLOMO),axis=0)
 cSALIENCE_mean=np.mean(np.array(cSALIENCE),axis=0)
 print('CMC(fusion):')
-print(cFUSION_mean)
-#print('good fusion coefficients:')
-#print(np.mean(np.array(coeffis),axis=0))
+print_cmc(cFUSION_mean,color=True)
+# print('good fusion coefficients:')
+# print(np.mean(np.array(coeffis),axis=0))
 print('time consumes:',time.time()-t1)
 plot_cmc(np.array([cFUSION_mean,cGOG_mean,cLOMO_mean,cSALIENCE_mean]), \
     ['fusion(viper)','GOG(viper)','LOMO(viper)','SALIENCE(viper)'],verbose=True)
