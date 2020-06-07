@@ -38,7 +38,7 @@ def get_cross_view_graph(*X,k=5,**kwargs):
        simi=1-cosine_dist(X[i],X[j])
        d2=max_knn(simi.T,k)
        if kwargs.get('backdoor'):
-           print('enter backdoor!')
+           print('use backdoor!')
            d1=d2 #same as source code of laplacianL2, but it is 
                  #not reasonable and may cause shape mismatch error!
        else:
@@ -46,7 +46,7 @@ def get_cross_view_graph(*X,k=5,**kwargs):
        W[t[i]:t[i+1],t[j]:t[j+1]]=(d1+d2.T)/2
     W=sym_matric(W) #we don't consider intra-view relationship, just set them as zero
     W[(W<0.5)&(W!=0)]=0.0001 #remove noise from the graph
-    #W[range(W.shape[0]),range(W.shape[0])]=0
+    W[range(W.shape[0]),range(W.shape[0])]=0
     return W
 
 def opt_W_lambd2(Y,k,lambd2):

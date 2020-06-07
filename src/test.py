@@ -8,12 +8,12 @@ from code.lomo.tools import calc_cmc,plot_cmc
 from sklearn.decomposition import PCA
 
 k_nn=3
-nBasis=630 #number of dictionary atoms
+nBasis=800 #number of dictionary atoms
 nIters=4 #iteration number
 ndim=630 #dim after project
-lambd1=10 #proj matrix(not 0) constraint
+lambd1=1 #proj matrix(not 0) constraint
 lambd2=.0001 #sparsity constraint
-lambd3=2 #graph constraint
+lambd3=1 #graph constraint
 lambd4=.0001 #affinity matrix constraint
 lambd0=.01
 
@@ -31,8 +31,8 @@ for trial in range(1):
     probFea2=pca.transform(probFea2.T).T
     galFea2=pca.transform(galFea2.T).T
 
-    probFea1,galFea1=probFea1[:,np.random.permutation(probFea1.shape[1])], \
-        galFea1[:,np.random.permutation(galFea1.shape[1])]
+    # probFea1,galFea1=probFea1[:,np.random.permutation(probFea1.shape[1])], \
+    #     galFea1[:,np.random.permutation(galFea1.shape[1])]
     
     for in_iter in range(1):
         print('1.construct graph(W) similarity matrix...')
