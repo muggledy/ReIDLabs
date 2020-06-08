@@ -33,8 +33,8 @@ for trial in range(1):
     print('Trial-%d...'%(trial+1))
     data=get_data(trial)
     probFea1,galFea1=data['trainA_feats'],data['trainB_feats']
-    probFea1,galFea1=probFea1[:,np.random.permutation(probFea1.shape[1])], \
-        galFea1[:,np.random.permutation(galFea1.shape[1])] #verify: shuffle samples' order won't 
+    # probFea1,galFea1=probFea1[:,np.random.permutation(probFea1.shape[1])], \
+    #     galFea1[:,np.random.permutation(galFea1.shape[1])] #verify: shuffle samples' order won't 
                                                            #affect result if don't use backdoor 
                                                            #in func get_cross_view_graph, this result 
                                                            #is reliable
@@ -43,10 +43,10 @@ for trial in range(1):
     for in_iter in range(1):
         print('1.construct graph(W) similarity matrix...')
         if in_iter==0:
-            W_full=get_cross_view_graph(probFea1,galFea1,k=k_nn,backdoor=False)
+            W_full=get_cross_view_graph(probFea1,galFea1,k=k_nn,backdoor=True)
         elif in_iter==1:
             print('use the learned samples\' coding this time')
-            W_full=get_cross_view_graph(train_a_after_D,train_b_after_D,k=k_nn,backdoor=False)
+            W_full=get_cross_view_graph(train_a_after_D,train_b_after_D,k=k_nn,backdoor=True)
 
         print('2.learn dictionary(D) with L2 laplacian...')
         D=dllap(np.hstack((probFea1,galFea1)), W_full, nBasis, alpha, beta, nIters, Dinit=D)
