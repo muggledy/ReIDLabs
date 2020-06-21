@@ -1,7 +1,10 @@
 import numpy as np
 import cv2
-from .lomo.tools import calc_cmc
-from .cprint import cprint,fcolors
+import os.path
+import sys
+sys.path.append(os.path.dirname(__file__))
+from lomo.tools import calc_cmc,measure_time
+from cprint import cprint,fcolors,cprint_err
 from functools import reduce
 
 def euc_dist(X,Y):
@@ -264,3 +267,8 @@ class CellMatrix2D:
             return slice(self.xcum[x],self.xcum[x+1]),slice(self.ycum[y],self.ycum[y+1])
         else:
             raise ValueError('Invalid pos! x must be in range[0,%d], y must be in range[0,%d]!'%(tx,ty))
+
+def mkdir_if_missing(dir_path):
+    if not os.path.exists(dir_path):
+        print('Create DIR %s'%os.path.normpath(dir_path))
+        os.makedirs(dir_path)

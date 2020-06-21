@@ -53,6 +53,6 @@ if __name__=='__main__':
           #norm operation can avoid some bug, e.g. out of index range(and matlab index start from 1)
     # c=calc_cmc(dist.T,labelQuery,labelTest,100)#(lomo version) rank1:40.42%
     # plot_cmc(c,['market-1501'],verbose=True)
-    cmc,map=calc_cmc_map(dist.T,labelQuery,labelTest,viewQuery,viewTest)
+    cmc,mAP=calc_cmc_map(dist.T,labelQuery,labelTest,viewQuery,viewTest)
     plot_cmc(cmc[:100],['market-1501'],verbose=True)
-    cprint_out('mAP: %.2f%%'%(map*100))
+    cprint_out('mAP: %.2f%%'%(mAP*100))

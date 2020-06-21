@@ -43,3 +43,4 @@ def learn_dict(X,Y,c=1,max_iter=100,info=False):
 
 ########################################################################################
 # who can write feature sign search(as same as source code)?
+# see http://www.cad.zju.edu.cn/home/dengcai/Data/SparseCoding.html

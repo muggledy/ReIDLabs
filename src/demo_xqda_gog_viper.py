@@ -28,7 +28,7 @@ galFea=normalize(gallery.T)
 
 numClass=632
 numRank=100
-numFolds=10
+numFolds=5
 
 cs=np.zeros((numFolds,numRank),np.float)
 
