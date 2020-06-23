@@ -28,7 +28,10 @@ class reidDataset(Dataset):
         return img,pid,cid
 
 def load_Market1501(dataset_dir,train_batch_size,test_batch_size, \
-                    train_transforms=None,test_transforms=None,num_workers=None):
+                    train_transforms=None,test_transforms=None,sampler=None,num_workers=None):
+    '''传递sampler参数（譬如RandomIdSampler）的时候要注意，值必须是partial(RandomIdSampler,num_instances=k)，
+       即在传递RandomIdSampler类的时候绑定一些其他必需参数，而这些参数又不好直接传递给load_Market1501，因为这样
+       的话必须在load_Market1501函数定义中添加一项新参数num_instances，不方便且不合理'''
     if train_transforms is None:
         train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(),T.ToTensor(), \
             T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
@@ -41,7 +44,8 @@ def load_Market1501(dataset_dir,train_batch_size,test_batch_size, \
     if num_workers is None:
         num_workers=4
     train_iter=DataLoader(reidDataset(market1501.trainSet,train_transforms),batch_size=train_batch_size, \
-        shuffle=True,num_workers=num_workers,drop_last=True)
+        shuffle=True if sampler is None else False,sampler= \
+        None if sampler is None else sampler(market1501.trainSet),num_workers=num_workers,drop_last=True)
     query_iter=DataLoader(reidDataset(market1501.querySet,test_transforms),batch_size=test_batch_size, \
         shuffle=False,num_workers=num_workers,drop_last=False)
     gallery_iter=DataLoader(reidDataset(market1501.gallerySet,test_transforms),batch_size=test_batch_size, \

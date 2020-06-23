@@ -62,9 +62,21 @@ class CheckPoint:
         if rel_path is not None:
             self._cur_checkpoint_path=os.path.normpath(os.path.join(self.dir_path,rel_path))
 
+def euc_dist(X1,X2=None):
+    '''欧氏距离矩阵计算（PytTorch版），参见../../tools.py#euc_dist'''
+    A=pt.pow(X1.t(),2).sum(dim=1,keepdim=True)
+    if X2 is None:
+        D=A.t()
+    else:
+        D=pt.pow(X2,2).sum(dim=0,keepdim=True)
+    return A+D-2*X1.t().mm(X1 if X2 is None else X2)
+
 if __name__ == "__main__":
-    net=FlattenLayer()
-    c=CheckPoint()
-    f='ResNet50_Classify.pt.tar'
-    # c.save({'state':net.state_dict,'epoch':5},f)
-    print(c.load(f))
+    import numpy as np
+    a=np.arange(12).reshape(4,-1)
+    b=np.arange(24).reshape(4,-1)
+    at=pt.from_numpy(a)
+    bt=pt.from_numpy(b)
+    print(euc_dist(at,bt))
+    from tools import euc_dist as euc_dist_numpy
+    print(euc_dist_numpy(a,b))

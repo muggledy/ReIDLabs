@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(__file__))
 from utils import FlattenLayer,Norm1DLayer
 
 class ResNet50_Classify(nn.Module):
-    '''最简单的基于ResNet50的分类网络，但是注意最后一层并未做SoftMax'''
+    '''最简单的基于ResNet50的分类网络，适用ID损失，但是注意最后一层并未做SoftMax'''
     def __init__(self,num_ids):
         super(ResNet50_Classify,self).__init__()
         self.train_mode=True
@@ -25,6 +25,32 @@ class ResNet50_Classify(nn.Module):
         f=self.base(X)
         if self.train_mode:
             return self.classifier(f)
+        else:
+            return f
+
+class ResNet50_Classify_Metric(nn.Module):
+    '''ResNet50_Classify的改造版，有少许不同，既适用ID损失，也适用度量损失（譬如三元组损失等度量学习方法），或者两者兼具'''
+    def __init__(self,num_ids,loss={'softmax','metric'}): #如果只使用metric，那么num_ids参数无需提供
+        super(ResNet50_Classify_Metric,self).__init__()
+        self.train_mode=True
+        self.loss=loss
+        resnet50=torchvision.models.resnet50(pretrained=True)
+        self.base=nn.Sequential(
+            *(list(resnet50.children())[:-1]),
+            FlattenLayer(),
+        )
+        if 'softmax' in self.loss:
+            self.classifier=nn.Linear(2048,num_ids)
+
+    def forward(self,X):
+        f=self.base(X)
+        if self.train_mode:
+            if self.loss=={'softmax'}:
+                return self.classifier(f)
+            elif self.loss=={'metric'}:
+                return f
+            elif self.loss=={'softmax','metric'}:
+                return self.classifier(f),f
         else:
             return f
 

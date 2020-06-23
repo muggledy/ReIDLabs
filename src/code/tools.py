@@ -7,13 +7,19 @@ from lomo.tools import calc_cmc,measure_time
 from cprint import cprint,fcolors,cprint_err
 from functools import reduce
 
-def euc_dist(X,Y):
+def euc_dist(X,Y=None):
     '''calc euclidean distance of X(d*m) and Y(d*n), func return 
        a dist matrix D(m*n), D[i,j] represents the distance of X[:,i] 
        and Y[:,j]'''
-    A=np.sum(X.T*(X.T),axis=1)
-    D=np.sum(Y.T*(Y.T),axis=1)
-    return A[:,None]+D[None,:]-X.T.dot(Y)*2
+    # A=np.sum(X.T*(X.T),axis=1)
+    # D=np.sum(Y.T*(Y.T),axis=1)
+    # return A[:,None]+D[None,:]-X.T.dot(Y)*2
+    A=np.sum(X.T*(X.T),axis=1,keepdims=True)
+    if Y is None:
+        D=A.T
+    else:
+        D=np.sum(Y*Y,axis=0,keepdims=True)
+    return A+D-2*X.T@(X if Y is None else Y)
 
 def norm_labels(labels):
     '''make category labels grow from 0 one by one, for example: 
