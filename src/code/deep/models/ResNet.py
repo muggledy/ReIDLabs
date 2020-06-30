@@ -4,7 +4,7 @@ import torchvision
 import os.path
 import sys
 sys.path.append(os.path.dirname(__file__))
-from utils import FlattenLayer,Norm1DLayer
+from utils import FlattenLayer,Norm1DLayer,HorizontalMaxPool2d
 
 class ResNet50_Classify(nn.Module):
     '''最简单的基于ResNet50的分类网络，适用ID损失，但是注意最后一层并未做SoftMax'''
@@ -54,12 +54,48 @@ class ResNet50_Classify_Metric(nn.Module):
         else:
             return f
 
+class ResNet50_Aligned(nn.Module):
+    '''AlignedReID: Surpassing Human-Level Performance in Person Re-Identification
+       (arXiv:1711.08184 [cs.CV])
+                                                DMLI
+                         BN & ReLU & horizon max ⇃
+           Resnet50       ┌——————————————————→ lf <triHard loss>
+       imgs —————→ f —————|      (N,C)       (N,c,h)
+               (N,C,H,W)  └—————→ gf <triHard loss>
+                          glob avg | FC layer
+                                   ↓
+                                  gf1 (N,K)
+                               <id loss>
+       '''
+    def __init__(self,num_ids):
+        super(ResNet50_Aligned,self).__init__()
+        self.train_mode=True
+        resnet50=torchvision.models.resnet50(pretrained=True)
+        self.base=nn.Sequential(*(list(resnet50.children())[:-2])) #主干，输出(batch_size,2048,h,w)，后接两个分支
+        self.bn=nn.BatchNorm2d(2048) #第一个参数是batchnorm层输入（batch_size,channel,h,w）的通道数channel(2048)
+        self.conv1x1=nn.Conv2d(2048,128,kernel_size=1,stride=1,padding=0,bias=True) #可选，加上主要是为了降低特征图
+                                                                                    #通道数，加速训练（上图并未标注）
+        self.classifier=nn.Linear(2048,num_ids)
+
+    def forward(self,X):
+        f=self.base(X)
+        gf=nn.AvgPool2d((f.size()[-2:]))(f) #全局分支，全局平均池化，输出(batch_size,channel,1,1)
+        gf=FlattenLayer()(gf) #删除空维，使形状为(batch_size,channel)，此处channel其实就是2048，
+                              #后接HardTri损失。这也是测试阶段的网络输出
+        if self.train_mode:
+            gf1=self.classifier(gf) #全局分支的另一个分叉，后接softmax分类损失
+            lf=nn.Sequential(self.bn,nn.ReLU(),HorizontalMaxPool2d(),self.conv1x1)(f).squeeze() #局部分
+                                                                                    #支，后接TriHard损失（不
+                                                                                    #同于全局分支，局部分支
+                                                                                    #上的距离矩阵根据DMLI求解）
+            lf = lf / pt.pow(lf,2).sum(dim=1, keepdim=True).clamp(min=1e-12).sqrt() #重要！否则出现nan
+            return gf1,(gf,lf) #输出形状分别为(batch_size,num_ids), (batch_size,2048), (batch_size,128,h)
+        else:
+            return gf
+
 if __name__=='__main__':
-    model=ResNet50_Classify(751)
-    t=pt.arange(24*4).view(2,3,4,4).to(pt.float32)
-    model.train_mode=False
-    out=model(t)
-    print(out.shape)
-    print((out[0]*out[0]).sum())
-    from utils import print_net_size
-    print_net_size(model)
+    model=ResNet50_Aligned(751)
+    imgs=pt.randn(32,3,256,128)
+    gf1,(gf,lf)=model(imgs)
+    print(gf1.shape,gf.shape,lf.shape)
+    print(gf1)

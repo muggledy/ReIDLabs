@@ -32,7 +32,9 @@ if __name__=='__main__': #为什么这部分代码一定要放在__main__块中�
     lr,num_epochs=0.0003,10
     optimizer=pt.optim.Adam(net.parameters(),lr=lr,weight_decay=5e-04)
     scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=6,gamma=0.1) #学习率衰减，参考：https://zhuanlan.zhihu.com/p/93624972
-                                                                            #注意checkpoint无法继续上次的step_size衰减过程
+                                                                            #注意checkpoint无法继续上次的step_size衰减过程，如果权重衰
+                                                                            #减地厉害，请下次执行的时候人为修改为上次结束时的学习率，以
+                                                                            #降低影响
     train(net,train_iter,(loss,),optimizer,num_epochs,scheduler,checkpoint=checkpoint) #即使你只想利用checkpoint做test，也必须先执行一下
-                                                                                    #train，由于epoch已达最大，所以实际并不会进行训练
+                                                                                       #train，由于epoch已达最大，所以实际并不会进行训练
     test(net,query_iter,gallery_iter,eval_cmc_map)

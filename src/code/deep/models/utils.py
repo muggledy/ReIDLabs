@@ -69,14 +69,84 @@ def euc_dist(X1,X2=None):
         D=A.t()
     else:
         D=pt.pow(X2,2).sum(dim=0,keepdim=True)
-    return A+D-2*X1.t().mm(X1 if X2 is None else X2)
+    return (A+D-2*X1.t().mm(X1 if X2 is None else X2)).clamp(min=1e-12)
+
+def euc_dist_pro(X1,X2=None):
+    '''euc_dist的增强版，且兼容euc_dist，参见../../tools.py#euc_dist_pro'''
+    X1T=pt.transpose(X1,-2,-1)
+    A=pt.pow(X1T,2).sum(dim=-1,keepdim=True)
+    if X2 is None:
+        D=pt.transpose(A,-2,-1)
+    else:
+        D=pt.pow(X2,2).sum(dim=-2,keepdim=True)
+    return (A+D-2*pt.matmul(X1T,X1 if X2 is None else X2)).clamp(min=1e-12)
+
+def hard_sample_mining(dist,labels,return_inds=False):
+    '''困难样本挖掘，dist是一个NxN方阵，labels是轴样本ID序列，长度为N，两个轴标记
+       是一样的，但需要注意的是，此处labels的构成必须是PxK的（N=PxK），表示含有P个
+       不同的行人ID，每个ID行人有K个图像，否则代码出错。return_inds决定是否返回那
+       些困难样本位置索引'''
+    N=dist.size(0)
+    t_labels=labels.expand(N,N)
+    mask_pos=t_labels.eq(t_labels.t())
+    # mask_neg=t_labels.ne(t_labels.t())
+    mask_neg=mask_pos==False
+    max_ap_v,max_ap_ind=pt.max(dist[mask_pos].contiguous().view(N,-1),dim=1)
+    min_an_v,min_an_ind=pt.min(dist[mask_neg].contiguous().view(N,-1),dim=1)
+    if return_inds:
+        _,y=pt.where(mask_pos==True)
+        x=pt.arange(N)
+        y=y.contiguous().view(N,-1)
+        ap_x,ap_y=x,y[x,max_ap_ind]
+        _,y=pt.where(mask_neg==True)
+        y=y.contiguous().view(N,-1)
+        an_x,an_y=x,y[x,min_an_ind]
+        return max_ap_v,min_an_v,(ap_x,ap_y),(an_x,an_y) #Note that 
+                                #     |           |      #dist[ap_x,ap_y] == dist[ap_inds] == max_ap_v 
+                                #  ap_inds     an_inds   #and 
+                                #                        #dist[an_x,an_y] == dist[an_inds] == min_an_v
+    return max_ap_v,min_an_v
+
+class HorizontalMaxPool2d(nn.Module): #水平池化
+    def __init__(self):
+        super(HorizontalMaxPool2d,self).__init__()
+
+    def forward(self,X): #X's shape is (batch_size,channel,h,w), pooled 
+                         #result's shape is (batch_size,channel,h,1)
+        return nn.MaxPool2d(kernel_size=(1,X.size(3)))(X)
+
+def shortest_dist(dist):
+    '''利用动态规划算法计算最短路径，输入dist形状为(m,n)或(m,n,batch_size)，前者将返回一个标量，
+       后者返回一个长度为batch_size的向量'''
+    m,n=dist.size()[:2]
+    t=[[0 for _ in range(n)] for _ in range(m)]
+    for i in range(m):
+        for j in range(n):
+            if i==0 and j==0:
+                t[i][j]=dist[i][j]
+            elif i==0 and j>0:
+                t[i][j]=t[i][j-1]+dist[i][j]
+            elif i>0 and j==0:
+                t[i][j]=t[i-1][j]+dist[i][j]
+            else:
+                t[i][j]=pt.min(t[i-1][j],t[i][j-1])+dist[i][j]
+    return t[-1][-1]
+
+def dist_DMLI(X,Y):
+    '''具体参考AlignedReID论文。计算X(batch_size,dim,m)和Y(batch_size,dim,n)之间的DMLI距离
+       ，X[i,:,:]代表了第i个行人的m个长度为dim的水平条特征，返回D，形状为(batch_size1,)
+       ，D[i]即X中第i个行人图像和Y中第i个行人图像的局部特征做对齐后所求距离值，根据最短路径（基于动
+       态规划）得到'''
+    stripe_dist_mat=euc_dist_pro(X,Y).sqrt() #(batch_size,m,n)
+    stripe_dist_mat=(pt.exp(stripe_dist_mat)-1.0)/(pt.exp(stripe_dist_mat)+1.0) #论文中的归一化处理
+    D=shortest_dist(stripe_dist_mat.permute(1,2,0)).view(-1)
+    return D
 
 if __name__ == "__main__":
     import numpy as np
-    a=np.arange(12).reshape(4,-1)
-    b=np.arange(24).reshape(4,-1)
-    at=pt.from_numpy(a)
-    bt=pt.from_numpy(b)
-    print(euc_dist(at,bt))
-    from tools import euc_dist as euc_dist_numpy
-    print(euc_dist_numpy(a,b))
+    a=pt.Tensor(4,88)
+    b=pt.Tensor(3,88)
+    print(euc_dist(a.t(),b.t()))
+    print(((a[0]-b[0])**2).sum())
+    print(a[0])
+    print(b[0])

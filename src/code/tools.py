@@ -21,6 +21,18 @@ def euc_dist(X,Y=None):
         D=np.sum(Y*Y,axis=0,keepdims=True)
     return A+D-2*X.T@(X if Y is None else Y)
 
+def euc_dist_pro(X,Y=None): #完全兼容euc_dist
+    '''calc euclidean distance of X(...,d,m) and Y(...,d,n), func 
+       return a dist matrix D(...,m,n), D[...,i,j] represents the 
+       distance of X[...,:,i] and Y[...,:,j]'''
+    XT=np.swapaxes(X,-2,-1)
+    A=np.sum(XT*XT,axis=-1,keepdims=True)
+    if Y is None:
+        D=np.swapaxes(A,-2,-1)
+    else:
+        D=np.sum(Y*Y,axis=-2,keepdims=True)
+    return A+D-2*np.matmul(XT,(X if Y is None else Y))
+
 def norm_labels(labels):
     '''make category labels grow from 0 one by one, for example: 
        [1 7 2 2 2 3 5 1] -> [0 4 1 1 1 2 3 0]'''
