@@ -1,5 +1,8 @@
 import torch.nn as nn
 import torch as pt
+import os.path
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__)))
 from models.utils import euc_dist,hard_sample_mining,dist_DMLI
 
 class TripletHardLoss(nn.Module):

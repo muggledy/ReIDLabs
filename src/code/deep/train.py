@@ -20,23 +20,30 @@ def setup_seed(seed):
 def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,**kwargs):
     '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]即序列形式。总损失loss
        =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...'''
-    flag='cuda' if pt.cuda.is_available() else 'cpu'
-    if device is None:
-        device=pt.device(flag)
+    flag='cuda' if pt.cuda.is_available() else 'cpu' #优先使用GPU
+    origin_device=device
+    device=pt.device(flag) if device is None else device
     net=net.to(device)
-    print('Now training on %s...'%device)
-    if flag=='cuda':
+    if flag=='cuda' and origin_device is None: #如果device已经人为给出，即拥有最高优先级。如果没有给出
+                                        #为None，才会尝试放到多GPU设备上运行，假设存在GPU设备的话
         cudnn.benchmark=True
-        net=nn.DataParallel(net).cuda() #允许多卡训练
+        net=nn.DataParallel(net) #允许多卡训练，https://blog.csdn.net/zhjm07054115/article/details/104799661/
+        print('Set cudnn.benchmark=True')
+        gpu_num=pt.cuda.device_count()
+        if gpu_num==1:
+            print('Try training on multi-GPU, but you have only one GPU:%d'%pt.cuda.current_device())
+        else:
+            print('Training on %d GPU devices'%gpu_num)
     else:
-        print('Currently using CPU(but GPU is highly recommended)')
+        print('Now training on %s...'%device)
+    
     if checkpoint is not None and checkpoint.loaded:
         net.load_state_dict(checkpoint.states_info_etc['state']) #注意必须在执行net=DataParallel(net)之后加载参数
         start_epoch=checkpoint.states_info_etc['epoch']+1
     else:
         start_epoch=0
     net.train()
-    net.train_mode=True
+    net.module.train_mode=True #注意，只要有GPU，我们就做了DataParallel！
     
     all_batches_num=len(train_iter)
     losses_num=len(losses)
@@ -88,3 +95,4 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         if checkpoint is not None:
             checkpoint.save({'state':net.state_dict(),'epoch':epoch})
     print('Train OVER!')
+    

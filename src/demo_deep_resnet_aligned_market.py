@@ -3,12 +3,14 @@ Rank-1:89.07% Rank-5:95.96% Rank-10:97.45% Rank-20:98.43% Rank-100:99.52%
 mAP:74.33
 参数设置：margin=0.3, num_instances=4, lr=0.0002, num_epochs=206, 
 batch_size=32, weight_decay=5e-04, step_size=150, gamma=0.1（测试仅使用了全
-局特征，且没有使用任何tricks）
+局特征，且没有使用任何tricks。理论上使用局部特征测试效果会更好。达到150epoch中断
+了一次，之后手动调整学习率为0.00002，继续训练，所以会和一次性训练结果稍有偏差）
 用时：1.48小时
 参考作者源码：https://github.com/michuanhaohao/AlignedReID
 '''
 
-from code.deep.data_loader import load_Market1501
+from code.deep.data_manager import Market1501
+from code.deep.data_loader import load_dataset
 from code.deep.models.ResNet import ResNet50_Aligned
 from code.deep.sampler import RandomIdSampler
 from code.deep.train import train,setup_seed
@@ -28,17 +30,18 @@ if __name__=='__main__':
     checkpoint.load('ResNet50_Aligned.tar')
 
     sampler=partial(RandomIdSampler,num_instances=4)
-    train_iter,query_iter,gallery_iter,market1501 \
-        =load_Market1501(dataset_dir,32,32,sampler=sampler)
+    market1501=Market1501(dataset_dir)
     market1501.print_info()
+    train_iter,query_iter,gallery_iter \
+        =load_dataset(market1501,32,32,sampler=sampler)
 
     net=ResNet50_Aligned(len(market1501.trainPids))
     margin=0.3
     losses=(nn.CrossEntropyLoss(),AlignedTriLoss(margin))
 
-    lr,num_epochs=0.0002,206
+    lr,num_epochs=0.0002,200
     optimizer=pt.optim.Adam(net.parameters(),lr=lr,weight_decay=5e-04)
-    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=150,gamma=0.1)
+    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=100,gamma=0.1)
     
     train(net,train_iter,losses,optimizer,num_epochs,scheduler, \
         checkpoint=checkpoint,losses_name= \

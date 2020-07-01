@@ -7,7 +7,8 @@ test_batchsize=0.0003,60,5e-04,20,0.1,32,32），总需1小时15分，本
 2020/6/20
 '''
 
-from code.deep.data_loader import load_Market1501
+from code.deep.data_manager import Market1501
+from code.deep.data_loader import load_dataset
 from code.deep.models.ResNet import ResNet50_Classify
 from code.deep.train import train,setup_seed
 from code.deep.test import test
@@ -24,8 +25,10 @@ if __name__=='__main__': #为什么这部分代码一定要放在__main__块中�
     checkpoint=CheckPoint()
     checkpoint.load('ResNet50_Classify.tar') #允许随时中断训练进程
 
-    train_iter,query_iter,gallery_iter,market1501=load_Market1501(dataset_dir,32,32)
+    market1501=Market1501(dataset_dir)
     market1501.print_info()
+    train_iter,query_iter,gallery_iter=load_dataset(market1501,32,32)
+    
     net=ResNet50_Classify(len(market1501.trainPids))
 
     loss=nn.CrossEntropyLoss()

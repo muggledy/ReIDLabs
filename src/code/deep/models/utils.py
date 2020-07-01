@@ -143,10 +143,4 @@ def dist_DMLI(X,Y):
     return D
 
 if __name__ == "__main__":
-    import numpy as np
-    a=pt.Tensor(4,88)
-    b=pt.Tensor(3,88)
-    print(euc_dist(a.t(),b.t()))
-    print(((a[0]-b[0])**2).sum())
-    print(a[0])
-    print(b[0])
+    pass

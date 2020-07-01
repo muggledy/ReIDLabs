@@ -6,7 +6,8 @@ used_losses={'softmax','metric'}, margin=0.3, num_instances=4, lr=0.0003,
 num_epochs=150, batch_size=32, weight_decay=5e-04, step_size=60, gamma=0.1
 '''
 
-from code.deep.data_loader import load_Market1501
+from code.deep.data_manager import Market1501
+from code.deep.data_loader import load_dataset
 from code.deep.models.ResNet import ResNet50_Classify_Metric
 from code.deep.sampler import RandomIdSampler,RandomIdSampler2
 from code.deep.train import train,setup_seed
@@ -43,9 +44,11 @@ if __name__=='__main__':
     checkpoint.load('ResNet50_Classify_Metric(%s).tar'%cpflag)
 
     sampler=partial(RandomIdSampler2,num_instances=4,num_paddings=None) #如果不想使用num_paddings扩充，直接置为None即可
-    train_iter,query_iter,gallery_iter,market1501 \
-        =load_Market1501(dataset_dir,32,32,sampler=sampler) #注意batch_size必须是num_instances的整数倍
+    market1501=Market1501(dataset_dir)
     market1501.print_info()
+    train_iter,query_iter,gallery_iter \
+        =load_dataset(market1501,32,32,sampler=sampler) #注意batch_size必须是num_instances的整数倍
+    
     net=ResNet50_Classify_Metric(len(market1501.trainPids),loss=used_losses)
 
     lr,num_epochs=0.0003,150

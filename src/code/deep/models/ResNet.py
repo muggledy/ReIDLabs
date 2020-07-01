@@ -10,7 +10,7 @@ class ResNet50_Classify(nn.Module):
     '''最简单的基于ResNet50的分类网络，适用ID损失，但是注意最后一层并未做SoftMax'''
     def __init__(self,num_ids):
         super(ResNet50_Classify,self).__init__()
-        self.train_mode=True
+        self.train_mode=True #所有模型都要有该参数
         resnet50=torchvision.models.resnet50(pretrained=True) #此处要删除原ResNet50的最后一层，因为最后一层是1000分
                                                               #类，不适用于当前任务（譬如Market1601训练集为751分类）
         self.base=nn.Sequential(

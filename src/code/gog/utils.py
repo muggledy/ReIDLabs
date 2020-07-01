@@ -1,7 +1,10 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from ..cprint import cprint_err
+import sys
+import os.path
+sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+from cprint import cprint_err
 
 def window_nd(a, window, steps = None, axis = None, outlist = False):
     """
@@ -139,14 +142,15 @@ def get_patches(X, window, steps):
         patches = patches.reshape(s)
     return patches
 
-def plot_patches(patches):
+def plot_patches(patches,line=True,axes=True,x_label=None,y_label=None):
     '''for the result of func get_patches, if the arg X of get_patches has 
        only 3 channels, i.e. an image, we can plot it with matplotlib'''
     if len(patches.shape)!=5 or patches.shape[-1]!=3:
         raise ValueError('invalid patches value!')
     patches=patches.copy()
-    patches[...,[0,-1],:,:]=255 #white split lines
-    patches[...,[0,-1],:]=255
+    if line:
+        patches[...,[0,-1],:,:]=255 #white split lines
+        patches[...,[0,-1],:]=255
     
     patch_h,patch_w=patches[0][0].shape[:2]
     rows,cols=patches.shape[:2]
@@ -160,7 +164,15 @@ def plot_patches(patches):
         col_imgs = col_imgs.reshape(-1, patch_w, 3)
         dst_img[:, col * patch_w:(col + 1) * patch_w, :] = col_imgs
     
+    if not axes:
+        # plt.axis('off')
+        plt.xticks([])
+        plt.yticks([])
     plt.imshow(dst_img[...,::-1])
+    if x_label:
+        plt.xlabel(x_label)
+    if y_label:
+        plt.ylabel(y_label)
     plt.show()
 
 def normalize(Z):
@@ -199,7 +211,8 @@ if __name__=='__main__':
     plt.show()
     '''
     img=cv2.imread(os.path.join(cwd,'../../../images/VIPeR.v1.0/cam_a/000_45.bmp'))
-    #patches=get_patches(img,20,5) #a demo for patches
-    patches=get_patches(img,(img.shape[0]/4,img.shape[1]),(img.shape[0]/8,img.shape[1]))[:,None,:,:,:] #a demo for horizontal strips
-    plot_patches(patches)
+    patches=get_patches(img,20,5) #a demo for patches
+    # patches=get_patches(img,(img.shape[0]/4,img.shape[1]),(img.shape[0]/8,img.shape[1]))[:,None,:,:,:] #a demo for horizontal strips
+    print(patches.shape)
+    plot_patches(patches,False,False)
     
