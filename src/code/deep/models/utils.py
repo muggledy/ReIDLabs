@@ -4,6 +4,7 @@ import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__),'../../'))
 from tools import mkdir_if_missing,cprint_err
+import numpy as np
 
 class FlattenLayer(nn.Module):
     def __init__(self):
@@ -107,13 +108,18 @@ def hard_sample_mining(dist,labels,return_inds=False):
                                 #                        #dist[an_x,an_y] == dist[an_inds] == min_an_v
     return max_ap_v,min_an_v
 
-class HorizontalMaxPool2d(nn.Module): #水平池化
-    def __init__(self):
-        super(HorizontalMaxPool2d,self).__init__()
+class HorizontalPool2d(nn.Module): #水平池化
+    def __init__(self,k=1,s=1,pool_type='max'):
+        super(HorizontalPool2d,self).__init__()
+        self.k,self.s=k,s
+        self.type=pool_type
 
     def forward(self,X): #X's shape is (batch_size,channel,h,w), pooled 
                          #result's shape is (batch_size,channel,h,1)
-        return nn.MaxPool2d(kernel_size=(1,X.size(3)))(X)
+        if self.type=='max':
+            return nn.MaxPool2d(kernel_size=(self.k,X.size(3)),stride=self.s)(X)
+        elif self.type=='avg':
+            return nn.AvgPool2d(kernel_size=(self.k,X.size(3)),stride=self.s)(X)
 
 def shortest_dist(dist):
     '''利用动态规划算法计算最短路径，输入dist形状为(m,n)或(m,n,batch_size)，前者将返回一个标量，
@@ -142,5 +148,49 @@ def dist_DMLI(X,Y):
     D=shortest_dist(stripe_dist_mat.permute(1,2,0)).view(-1)
     return D
 
+def seek_ks_3m(h,h_,printf=False):
+    '''根据3m原则寻找最佳核尺寸和步长，h为输入长度，h_为输出长度，函数除了返回
+       最佳尺寸和步长外，还会返回滑动的最大非重叠区域以及滑动过程中的重叠区域
+       3m原则：最大化非重叠区域、最小化重叠区域以及最小化步长'''
+    sel=[]
+    for k in range(1,h+1):
+        for s in range(1,h+1):
+            if np.floor((h-k)/s+1)==h_:
+                sel.append([k,s,k*h_-max(k-s,0)*(h_-1),max(k-s,0)*(h_-1)]) #(尺寸,步长,最大非重叠滑动区域,总重叠区域)
+    sel=np.array(sel)
+    if printf:
+        print('K | S | M1 | M2')
+        print(np.squeeze(sel))
+        print('-'*15)
+    if sel.shape[0]>1:
+        sel=sel[sel[:,2]==np.max(sel[:,2])]
+        sel=sel[sel[:,3]==np.min(sel[:,3])]
+        return np.squeeze(sel[np.argmin(sel[:,1])])
+    elif sel.shape[0]==1:
+        return np.squeeze(sel)
+    else:
+        raise ValueError('seek_ks_3m err')
+
+class SqueezeLayer(nn.Module):
+    def __init__(self):
+        super(SqueezeLayer,self).__init__()
+    def forward(self,X):
+        return X.squeeze()
+
+def get_rest_params(net,submodules=None): #譬如要获取网络中除第一个卷积层net.conv1和第二个卷积层net.conv2
+                                          #之外的参数，此处submodules就设为['conv1','conv2']。这个函数是为
+                                          #学习率分层衰减设计的
+    used_params=[]
+    if submodules is not None: #如果submodules为None，表示仅剔除PReLU
+        for sm in submodules:
+            used_params+=list(map(id,getattr(net,sm).parameters()))
+    prelu_params=[]
+    for m in net.modules():
+        if isinstance(m,nn.PReLU): #一般不对PReLU参数做衰减
+            prelu_params+=list(map(id,m.parameters()))
+    rest_params=filter(lambda x:id(x) not in used_params+prelu_params,net.parameters())
+    return rest_params
+
 if __name__ == "__main__":
-    pass
+    k,s=seek_ks_3m(24,6)[:2]
+    print(k,s)

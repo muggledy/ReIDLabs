@@ -59,6 +59,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     for epoch in range(start_epoch,epochs):
         for batch_ind,(batchImgs,pids,cids) in enumerate(train_iter):
             batchImgs,pids=batchImgs.to(device),pids.to(device) #目前用不到cids摄像头信息
+            # print([False for i in net.parameters() if not i.is_cuda]) #查看是否有网络参数不在cuda上
             out=net(batchImgs)
             if not isinstance(out,(list,tuple)):
                 out=[out]
@@ -86,10 +87,12 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
             L.backward()
             optimizer.step()
             if batch_ind==0 or (batch_ind+1)%20==0:
-                print('epoch=%d, batch=[%d/%d], %s, lr=%f'%(epoch+1,batch_ind+1,all_batches_num, \
+                opt_parms=optimizer.param_groups if scheduler is None else scheduler.optimizer.param_groups
+                print('epoch=%d, batch=[%d/%d], %s, %s'%(epoch+1,batch_ind+1,all_batches_num, \
                     'loss=%f'%L if nLlist==1 else ('loss(all)=%f, '%L)+ \
                     (', '.join(['%s=%f'%(losses_name[i],Llist[i]) for i in range(nLlist)])), \
-                    optimizer.param_groups[0]["lr"] if scheduler is None else scheduler.get_last_lr()[0]))
+                    ', '.join(['lr(%s)=%s'%(e.get('name',i+1),e['lr']) for i,e in enumerate(opt_parms)]) \
+                    if len(list(opt_parms))>1 else 'lr=%s'%opt_parms[0]['lr']))
         if scheduler is not None:
             scheduler.step()
         if checkpoint is not None:

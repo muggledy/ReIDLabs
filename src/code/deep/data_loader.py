@@ -34,7 +34,7 @@ def load_dataset(dataset,train_batch_size=None,test_batch_size=None,train_transf
         if train_transforms is None:
             train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(),T.ToTensor(), \
                 T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
-            train_transforms=T.Compose(train_transforms)
+        train_transforms=T.Compose(train_transforms)
     if test_transforms is None:
         test_transforms=[T.Resize((256,128)),T.ToTensor(), \
             T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
