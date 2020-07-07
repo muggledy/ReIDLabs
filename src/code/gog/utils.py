@@ -142,7 +142,7 @@ def get_patches(X, window, steps):
         patches = patches.reshape(s)
     return patches
 
-def plot_patches(patches,line=True,axes=True,x_label=None,y_label=None):
+def plot_patches(patches,line=True,axes=True,x_label=None,y_label=None,BGRorRGB='BGR'):
     '''for the result of func get_patches, if the arg X of get_patches has 
        only 3 channels, i.e. an image, we can plot it with matplotlib'''
     if len(patches.shape)!=5 or patches.shape[-1]!=3:
@@ -168,7 +168,12 @@ def plot_patches(patches,line=True,axes=True,x_label=None,y_label=None):
         # plt.axis('off')
         plt.xticks([])
         plt.yticks([])
-    plt.imshow(dst_img[...,::-1])
+    if BGRorRGB=='BGR':
+        plt.imshow(dst_img[...,::-1])
+    elif BGRorRGB=='RGB':
+        plt.imshow(dst_img)
+    else:
+        raise ValueError('Invalid BGRorRGB value!')
     if x_label:
         plt.xlabel(x_label)
     if y_label:

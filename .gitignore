@@ -9,9 +9,13 @@
 !/src/code/third-party/eigen/.gitkeep
 /images/*
 !/images/VIPeR.v1.0/
+!/images/split_market1501.py
 !/images/.gitkeep
 /data/*
 !/data/.gitkeep
 !/data/lda_data_demo.mat
+/src/code/cycle_gan/datasets/*
+!/src/code/cycle_gan/datasets/.gitkeep
+/src/code/cycle_gan/out
 /.vscode/*
 **/__pycache__/

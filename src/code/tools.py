@@ -6,6 +6,10 @@ sys.path.append(os.path.dirname(__file__))
 from lomo.tools import calc_cmc,measure_time
 from cprint import cprint,fcolors,cprint_err
 from functools import reduce
+from collections import Iterable
+import requests
+from PIL import Image
+from io import BytesIO
 
 def euc_dist(X,Y=None):
     '''calc euclidean distance of X(d*m) and Y(d*n), func return 
@@ -290,3 +294,55 @@ def mkdir_if_missing(dir_path):
     if not os.path.exists(dir_path):
         print('Create DIR %s'%os.path.normpath(dir_path))
         os.makedirs(dir_path)
+
+def flatten(a):
+    '''使用递归展开一个嵌套的多层for循环'''
+    ret=[]
+    for i in a:
+        if isinstance(i,Iterable):
+            ret.extend(flatten(i))
+        else:
+            ret.append(i)
+    return ret
+
+class crawler:
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' \
+             'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.' \
+             '79 Safari/537.36 Edge/14.14393'}
+              
+    def __init__(self,url=None,save_path=None):
+        self.url=url
+        self.save_path=save_path
+        
+    def get(self,url=None,method='GET',**kwargs):
+        if url is not None:
+            self.url=url
+        elif self.url is None:
+            raise ValueError('Invalid URL!')
+        if kwargs.get('headers') is None:
+            kwargs['headers']=self.headers
+        response=requests.request(method,self.url,**kwargs)
+        response.raise_for_status()
+        self.response=response
+        print('Get [%s](%.2fM) from %s successfully!'%(self.response.headers['Content-Type'], \
+            float(self.response.headers['Content-Length'])/1048576,self.url))
+        return self #返回爬虫自身
+        
+    def save(self,save_path=None):
+        if save_path is not None:
+            self.save_path=save_path
+        elif self.save_path is None:
+            raise ValueError('Invalid SAVE_PATH!')
+        with open(self.save_path,'wb') as f:
+            f.write(self.response.content)
+        print('Save to %s'%self.save_path)
+        
+    def show_img(self): #如果获取的是图片，可以调用此方法
+        img=Image.open(BytesIO(self.response.content))
+        img.show()
+        
+    def __call__(self,*args,**kwargs): #这些参数将如数传递给get内部的request函数
+        return self.get(*args,**kwargs)
+
+if __name__=='__main__':
+    pass
