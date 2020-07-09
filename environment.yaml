@@ -1,5 +1,6 @@
-name: kerasReID
+name: reid
 channels:
+  - pytorch
   - https://mirrors.sjtug.sjtu.edu.cn/anaconda/pkgs/main
   - https://mirrors.sjtug.sjtu.edu.cn/anaconda/pkgs/free
   - https://mirrors.sjtug.sjtu.edu.cn/anaconda/cloud/conda-forge
@@ -12,21 +13,24 @@ dependencies:
   - backcall=0.1.0=py_0
   - blas=1.0=mkl
   - bleach=3.1.0=py_0
-  - ca-certificates=2020.4.5.1=hecc5488_0
-  - certifi=2020.4.5.1=py36h9f0ad1d_0
+  - ca-certificates=2020.4.5.2=hecda079_0
+  - certifi=2020.4.5.2=py36h9f0ad1d_0
   - cffi=1.13.2=py36hb32ad35_0
   - cloudpickle=1.3.0=py_0
   - colorama=0.4.1=py_0
   - cryptography=2.5=py36h74b6da3_1
+  - cudatoolkit=10.2.89=h74a9793_0
   - cycler=0.10.0=py_2
+  - cython=0.29.16=py36hbd05846_0
   - cytoolz=0.10.1=py36hfa6e2cd_0
   - dask-core=2.14.0=py_0
   - decorator=4.4.1=py_0
   - defusedxml=0.6.0=py_0
   - entrypoints=0.3=py36_1000
+  - fastcache=1.1.0=py36h68a101e_1
   - freetype=2.10.0=h563cfd7_1
   - icc_rt=2019.0.0=h0cc432a_1
-  - icu=57.1=vc14_0
+  - icu=58.2=ha66f8fd_1
   - imageio=2.8.0=py_0
   - importlib_metadata=1.1.0=py36_0
   - intel-openmp=2019.4=245
@@ -64,9 +68,11 @@ dependencies:
   - mkl=2019.4=245
   - mkl-service=2.3.0=py36hfa6e2cd_0
   - more-itertools=8.0.0=py_0
+  - mpmath=1.1.0=py_0
   - nbconvert=5.6.1=py36_0
   - nbformat=4.4.0=py_1
   - networkx=2.4=py_1
+  - ninja=1.10.0=h1ad3211_0
   - notebook=6.0.1=py36_0
   - numpy=1.16.2=py36h8078771_1
   - olefile=0.46=py_0
@@ -89,11 +95,12 @@ dependencies:
   - python-dateutil=2.8.1=py_0
   - python-slugify=4.0.0=py_0
   - python_abi=3.6=1_cp36m
+  - pytorch=1.5.0=py3.6_cuda102_cudnn7_0
   - pywavelets=1.1.1=py36hc8d92b1_0
   - pywin32=225=py36hfa6e2cd_0
   - pywinpty=0.5=py36_1
   - pyzmq=18.1.1=py36h16f9016_0
-  - qt=5.6.2=vc14_6
+  - qt=5.6.2=vc14h6f8c307_12
   - requests=2.22.0=py36_1
   - scikit-image=0.16.2=py36he350917_0
   - scikit-learn=0.22.2.post1=py36h7208079_0
@@ -101,17 +108,20 @@ dependencies:
   - setuptools=42.0.2=py36_0
   - sip=4.18.1=py36h6538335_1000
   - six=1.13.0=py36_0
+  - sqlite=3.30.1=hfa6e2cd_0
+  - sympy=1.5.1=py36h9f0ad1d_3
   - terminado=0.8.3=py36_0
   - testpath=0.4.4=py_0
   - text-unidecode=1.2=py_0
   - tk=8.6.10=hfa6e2cd_0
   - toolz=0.10.0=py_0
+  - torchvision=0.6.0=py36_cu102
   - tornado=6.0.3=py36hfa6e2cd_0
   - tqdm=4.40.0=py_0
   - traitlets=4.3.3=py36_0
   - unidecode=1.1.1=py_0
-  - vc=14=0
-  - vs2015_runtime=14.0.25420=0
+  - vc=14.1=h869be7e_1
+  - vs2015_runtime=14.16.27012=h30e32a0_2
   - wcwidth=0.1.7=py_1
   - webencodings=0.5.1=py_1
   - wheel=0.33.6=py36_0
@@ -144,6 +154,7 @@ dependencies:
     - keras-applications==1.0.8
     - keras-preprocessing==1.1.0
     - markdown==3.1.1
+    - matlabengineforpython==R2018a
     - nvidia-ml-py3==7.352.0
     - oauthlib==3.1.0
     - opencv-contrib-python==3.4.0.12
@@ -154,6 +165,8 @@ dependencies:
     - psutil==5.6.7
     - pyasn1==0.4.8
     - pyasn1-modules==0.2.7
+    - pyaudio==0.2.11
+    - pycryptodome==3.9.7
     - pytz==2019.3
     - pyyaml==5.2
     - requests-oauthlib==1.3.0
@@ -164,7 +177,8 @@ dependencies:
     - tensorflow-gpu==2.0.0
     - termcolor==1.1.0
     - urllib3==1.25.7
+    - vprof==0.38
     - werkzeug==0.16.0
     - wrapt==1.11.2
-prefix: D:\myworld\anaconda\envs\kerasReID
+prefix: D:\myworld\anaconda\envs\reid
 
