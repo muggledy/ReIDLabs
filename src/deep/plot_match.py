@@ -1,24 +1,24 @@
 import torch as pt
 import torch.nn as nn
-import torch.backends.cudnn as cudnn
-from data_manager import load_query_gallery
-from data_loader import load_dataset
-from eval_metric import eval_cmc_map
-from test import test
-import os.path
-import matplotlib.pyplot as plt
-import cv2
 import numpy as np
-from pprint import pprint
+import torch.backends.cudnn as cudnn
+import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
 from gog.utils import plot_patches
-from cprint import colors
+from zoo.cprint import colors
+from deep.data_manager import load_query_gallery
+from deep.data_loader import load_dataset
+from deep.eval_metric import eval_cmc_map
+from deep.test import test
+import matplotlib.pyplot as plt
+import cv2
+from pprint import pprint
 
-def set_img_color_frame(img,color=None,width=2): #img's shape is (h,w,3)，color可以是常见的
-                                         #颜色名，如'red'，也可以是RGB值，如[0,255,255]
-                                         #这边img是用cv2读取的，是BGR通道，而color是RGB
-                                         #通道，所以赋值时要注意换一下顺序
+def set_img_color_frame(img,color=None,width=2):
+    '''img's shape is (h,w,3)，color可以是常见的颜色名，如'red'，
+       也可以是RGB值，如[0,255,255]。注意这边img是用cv2读取的，是
+       BGR通道，而color是RGB通道，所以赋值时要注意换一下顺序'''
     if isinstance(color,str): #通过colors.keys()查看所有支持的颜色名
         color=colors[color][2]
     color=color[::-1] #RGB->BGR

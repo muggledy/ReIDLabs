@@ -1,7 +1,7 @@
 #include <iostream>
 #include "main.h"
 #include <vector>
-#include "../third-party/eigen/eigen/Eigen/Dense"
+#include "../third-party/eigen/Eigen/Dense"
 
 using namespace std;
 using namespace Eigen;

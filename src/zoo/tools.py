@@ -1,15 +1,21 @@
 import numpy as np
 import cv2
-import os.path
+import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
-from lomo.tools import calc_cmc,measure_time
+os.environ['path']=os.environ['path']+';%s'%os.path.normpath(os.path.join(os.path.dirname(__file__),'../../scripts/'))
+import rarfile
+import zipfile
+from lomo.tools import calc_cmc,measure_time,getcwd
 from zoo.cprint import cprint,fcolors,cprint_err
 from functools import reduce
 from collections import Iterable
 import requests
 from PIL import Image
 from io import BytesIO
+from contextlib import closing
+import time
+import struct
 
 def euc_dist(X,Y=None):
     '''calc euclidean distance of X(d*m) and Y(d*n), func return 
@@ -305,10 +311,88 @@ def flatten(a):
             ret.append(i)
     return ret
 
-class crawler:
-    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' \
-             'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.' \
-             '79 Safari/537.36 Edge/14.14393'}
+class Audio(object): #comes from https://www.jianshu.com/p/b28faf43053d
+    def __init__(self):
+        """播放音频"""
+        from pygame import mixer
+        self.pygame_mixer = mixer
+        self.pygame_mixer.init()
+        self.audio_bytes = None
+
+    def play(self, audio_bytes=None):
+        """传入音频文件字节码，播放音频"""
+        audio_bytes = self.audio_bytes or audio_bytes
+        if audio_bytes is None:
+            return
+        byte_obj = BytesIO()
+        byte_obj.write(audio_bytes)
+        byte_obj.seek(0, 0)
+        self.pygame_mixer.music.load(byte_obj)
+        self.pygame_mixer.music.play()
+        while self.pygame_mixer.music.get_busy() == 1:
+            time.sleep(0.1)
+        self.pygame_mixer.music.stop()
+
+def filetype(file): #comes from https://blog.csdn.net/mingzznet/article/details/46279753
+    fileTypeList={"52617221": 'rar', "504B0304": 'zip', '89504E47': 'png', 'FFD8FF': 'jpg', 
+                  '424D': 'bmp', '57415645': 'wav', '41564920': 'avi'} # 一些常见的文件类型
+    def bytes2hex(bytes): # 字节码转16进制字符串
+        num = len(bytes)
+        hexstr = u""
+        for i in range(num):
+            t = u"%x" % bytes[i]
+            if len(t) % 2:
+                hexstr += u"0"
+            hexstr += t
+        return hexstr.upper()
+    if isinstance(file,str) and os.path.exists(file):
+        binfile = open(file, 'rb')
+        ftype = 'unknown'
+        for hcode in fileTypeList.keys():
+            numOfBytes = int(len(hcode) / 2) # 需要读多少字节
+            binfile.seek(0) # 每次读取都要回到文件头，不然会一直往后读取
+            hbytes = struct.unpack_from("B"*numOfBytes, binfile.read(numOfBytes)) # 一个"B"表示一个字节
+            f_hcode = bytes2hex(hbytes)
+            if f_hcode == hcode:
+                ftype = fileTypeList[hcode]
+                break
+        binfile.close()
+    else: #否则必须是二进制数据
+        for hcode in fileTypeList.keys():
+            numOfBytes = int(len(hcode) / 2)
+            hbytes = struct.unpack_from("B"*numOfBytes, file[:numOfBytes])
+            f_hcode = bytes2hex(hbytes)
+            if f_hcode == hcode:
+                ftype = fileTypeList[hcode]
+                break
+    return ftype
+
+class ProgressBar: #comes from https://www.jb51.net/article/156304.htm
+    def __init__(self, title, count, total):
+        self.info = "%.2f%%|%s| %s【%s】 %.2fMB/%.2fMB"
+        self.title = title
+        self.total = total
+        self.count = count
+        self.state = "正在下载"
+    
+    def __get_info(self):
+        now=self.count/1048576
+        end=self.total/1048576
+        _info = self.info % (100*now/end, '█'*(int(20*(now/end)))+' '*(int(20*((end-now)/end))), \
+            self.state, self.title, now, end)
+        return _info
+    
+    def refresh(self, count):
+        self.count += count
+        end_str = "\r"
+        if self.count >= self.total:
+            end_str = '\n'
+            self.state="下载完成"
+        print(self.__get_info(), end=end_str)
+
+class Crawler:
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' \
+             '(KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36 Edge/14.14393'}
               
     def __init__(self,url=None,save_path=None):
         self.url=url
@@ -318,31 +402,184 @@ class crawler:
         if url is not None:
             self.url=url
         elif self.url is None:
-            raise ValueError('Invalid URL!')
+            raise ValueError('Must give URL!')
         if kwargs.get('headers') is None:
             kwargs['headers']=self.headers
-        response=requests.request(method,self.url,**kwargs)
-        response.raise_for_status()
-        self.response=response
-        print('Get [%s](%.2fM) from %s successfully!'%(self.response.headers['Content-Type'], \
-            float(self.response.headers['Content-Length'])/1048576,self.url))
-        return self #返回爬虫自身
+        raise_error=kwargs.get('raise_error')
+        if raise_error is not None:
+            del kwargs['raise_error']
+        show_bar=kwargs.get('show_bar')
+        if show_bar is not None:
+            del kwargs['show_bar']
+        if show_bar: #如果给出show_bar参数为真，则会展示下载进度条，默认不展示
+            kwargs['stream']=True
+            chunk_size=kwargs.get('chunk_size')
+            if chunk_size is None: #在show_bar为真时，可以传递chunk_size和name参数
+                chunk_size=1024*1024 # 单次请求最大值（1MB）
+            else:
+                del kwargs['chunk_size']
+            name=kwargs.get('name')
+            if name is None:
+                name='未命名'
+            else:
+                del kwargs['name']
+            self.content=None
+            with closing(requests.request(method,self.url,**kwargs)) as response:
+                self.content_length = float(response.headers['content-length']) # 内容体总大小
+                self.content_type=response.headers['Content-Type']
+                progress = ProgressBar(name, 0, total=self.content_length)
+                for data in response.iter_content(chunk_size=chunk_size):
+                    progress.refresh(count=len(data))
+                    if self.content is None:
+                        self.content=data
+                    else:
+                        self.content+=data
+        else:
+            response=requests.request(method,self.url,**kwargs)
+            if raise_error: #如果给出raise_error参数为真，则在response!=200时抛出异常，默认不抛
+                response.raise_for_status()
+            if response.ok:
+                self.content_type=response.headers['Content-Type']
+                self.content_length=response.headers['Content-Length']
+                self.content=response.content
+                print('Get file[%s](%.2fM) from %s successfully!'%(self.content_type, \
+                    float(self.content_length)/1048576,self.url))
+            else:
+                print('Failed(%d)!'%response.status_code)
+            return self #返回爬虫自身
         
     def save(self,save_path=None):
         if save_path is not None:
-            self.save_path=save_path
+            self.save_path=os.path.normpath(save_path)
+            if not os.path.exists(os.path.dirname(self.save_path)):
+                print('Create dir %s'%os.path.dirname(self.save_path))
+                os.makedirs(os.path.dirname(self.save_path))
         elif self.save_path is None:
-            raise ValueError('Invalid SAVE_PATH!')
+            self.save_path=os.path.join(getcwd(),'result') #如果没有给出保存路径，则默认保存到此函数的
+                                                           #调用者所在目录下名为result.<suffix>的文件下
+        suffix=filetype(self.content) #可以通过文件头标识判断，这种方式更准确
+                                      #https://www.cnblogs.com/senior-engineer/p/9541719.html
+        if suffix=='unknown':
+            suffix=self.content_type.split('/')[-1] #获取文件后缀，用于辅助上面的文件头标识判断
+            if suffix=='x-rar-compressed':
+                suffix='rar'
+            else:
+                pass
+        self.save_file_suffix=suffix
+        if not self.save_path.lower().endswith(suffix.lower()): #注意这边会自动添加后缀！
+            self.save_path+='.%s'%suffix
+        self.save_path=os.path.normpath(self.save_path)
         with open(self.save_path,'wb') as f:
-            f.write(self.response.content)
+            f.write(self.content)
         print('Save to %s'%self.save_path)
         
     def show_img(self): #如果获取的是图片，可以调用此方法
-        img=Image.open(BytesIO(self.response.content))
+        img=Image.open(BytesIO(self.content))
         img.show()
+        
+    def play_audio(self): #https://pythonbasics.org/python-play-sound/
+        Audio().play(self.content)
         
     def __call__(self,*args,**kwargs): #这些参数将如数传递给get内部的request函数
         return self.get(*args,**kwargs)
 
+def unzip(file_path,save_dir,file_type=None):
+    if file_type is None:
+        file_type=file_path.split('.')[-1]
+    file_path,save_dir=os.path.normpath(file_path),os.path.normpath(save_dir)
+    if file_type=='rar': #https://rarfile.readthedocs.io/faq.html#what-are-the-dependencies
+        rar_file=rarfile.RarFile(file_path)
+        rar_file.extractall(save_dir)
+        rar_file.close()
+    elif file_type=='zip':
+        zip_file=zipfile.ZipFile(file_path)
+        zip_file.extractall(save_dir)
+        zip_file.close()
+    else:
+        raise ValueError('Invalid file type(%s?), Must be zip or rar!'%file_type)
+    print('Extracted %s into %s'%(file_path,save_dir))
+
+def split_dataset_trials(pids,cids,dataset,trials=10): #我将提供此处所有数据集的下载
+    pids=norm_labels(pids)
+    cids=norm_labels(cids)
+    if dataset=='viper':
+        cam_a_inds=np.where(cids==0)[0]
+        cam_b_inds=np.where(cids==1)[0]
+        cam_a_sorted_by_pids_inds=cam_a_inds[np.argsort(pids[cam_a_inds])]
+        cam_b_sorted_by_pids_inds=cam_b_inds[np.argsort(pids[cam_b_inds])]
+        for _ in range(trials):
+            p=np.random.permutation(632)
+            ptrain,ptest=p[:316],p[316:]
+            ret={}
+            ret['indsAtrain']=cam_a_sorted_by_pids_inds[ptrain]
+            ret['indsBtrain']=cam_b_sorted_by_pids_inds[ptrain]
+            ret['indsAtest']=cam_a_sorted_by_pids_inds[ptest]
+            ret['indsBtest']=cam_b_sorted_by_pids_inds[ptest]
+            ret['labelsAtrain']=pids[ret['indsAtrain']]
+            ret['labelsBtrain']=pids[ret['indsBtrain']]
+            ret['labelsAtest']=pids[ret['indsAtest']]
+            ret['labelsBtest']=pids[ret['indsBtest']]
+            ret['camlabelsAtrain']=cids[ret['indsAtrain']]
+            ret['camlabelsBtrain']=cids[ret['indsBtrain']]
+            ret['camlabelsAtest']=cids[ret['indsAtest']]
+            ret['camlabelsBtest']=cids[ret['indsBtest']]
+            yield ret
+    elif dataset=='cuhk01':
+        cam_a_inds=np.where(cids==0)[0]
+        cam_b_inds=np.where(cids==1)[0]
+        cam_a_sorted_by_pids_inds=cam_a_inds[np.argsort(pids[cam_a_inds])]
+        cam_b_sorted_by_pids_inds=cam_b_inds[np.argsort(pids[cam_b_inds])]
+        for _ in range(trials):
+            p=np.random.permutation(485+486)
+            ptrain,ptest=(p[:485]*2)[:,None],(p[485:]*2)[:,None]
+            ptrain=np.hstack((ptrain,ptrain+1)).flatten()
+            ptest=np.hstack((ptest,ptest+1)).flatten()
+            ret={}
+            ret['indsAtrain']=cam_a_sorted_by_pids_inds[ptrain]
+            ret['indsBtrain']=cam_b_sorted_by_pids_inds[ptrain]
+            ret['indsAtest']=cam_a_sorted_by_pids_inds[ptest]
+            ret['indsBtest']=cam_b_sorted_by_pids_inds[ptest]
+            ret['labelsAtrain']=pids[ret['indsAtrain']]
+            ret['labelsBtrain']=pids[ret['indsBtrain']]
+            ret['labelsAtest']=pids[ret['indsAtest']]
+            ret['labelsBtest']=pids[ret['indsBtest']]
+            ret['camlabelsAtrain']=cids[ret['indsAtrain']]
+            ret['camlabelsBtrain']=cids[ret['indsBtrain']]
+            ret['camlabelsAtest']=cids[ret['indsAtest']]
+            ret['camlabelsBtest']=cids[ret['indsBtest']]
+            yield ret
+    elif dataset=='cuhk02':
+        pass
+        
 if __name__=='__main__':
-    pass
+    import scipy.io as scio
+    feadir=r'C:\Users\Administrator\Desktop\CAMEL-master'
+    # viper_pids=list(range(632))*2
+    # viper_cids=[1]*632+[2]*632
+    # ret=split_dataset_trials(viper_pids,viper_cids,'viper')
+    # viperfeafile=os.path.join(feadir,'viper_jstl64.mat')
+    # viperfea=scio.loadmat(viperfeafile)['feature']
+    # print(viperfea.shape)
+    ### viper通过camel提供的matlab提取jstl特征后，直接用viperjstl分支下的split.m分割，然后执行demo_ours.m即可
+    cuhk01_pids=np.broadcast_to(np.arange(485+486)[:,None],(485+486,4)).flatten().tolist()
+    cuhk01_cids=[1,1,2,2]*(485+486)
+    ret=split_dataset_trials(cuhk01_pids,cuhk01_cids,'cuhk01')
+    cuhk01feafile=os.path.join(feadir,'cukh01_jstl64.mat')
+    cuhk01feasavefile=os.path.join(feadir,'cuhk01_jstl64_save.mat')
+    cuhk01fea=scio.loadmat(cuhk01feafile)['feature']
+    save_data={}
+    for trial_num,trial_data in enumerate(ret,1):
+        save_data['trial%d'%trial_num]={'featAtrain':cuhk01fea[:,trial_data['indsAtrain']],\
+            'featBtrain':cuhk01fea[:,trial_data['indsBtrain']],\
+                'featAtest':cuhk01fea[:,trial_data['indsAtest']],\
+                    'featBtest':cuhk01fea[:,trial_data['indsBtest']],
+                    'labelsAtrain':trial_data['labelsAtrain']+1,
+                    'labelsBtrain':trial_data['labelsBtrain']+1,
+                    'labelsAtest':trial_data['labelsAtest']+1,
+                    'labelsBtest':trial_data['labelsBtest']+1,
+                    'camlabelsAtrain':trial_data['camlabelsAtrain']+1,
+                    'camlabelsBtrain':trial_data['camlabelsBtrain']+1,
+                    'camlabelsAtest':trial_data['camlabelsAtest']+1,
+                    'camlabelsBtest':trial_data['camlabelsBtest']+1}
+    scio.savemat(cuhk01feasavefile,save_data)
+    ### 提取jstl特征后，由cuhk01jstl分支下的split对cuhk01_jstl64_save.mat做组织，得到CUHK01_jstl64_split.mat，再执行demo_ours.m即可

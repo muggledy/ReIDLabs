@@ -62,7 +62,7 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
     # distmat=distmat.numpy()
     distmat=cosine_dist(q_feas.numpy().T,g_feas.numpy().T)
     if evaluate is not None:
-        print("Computing CMC and mAP")
+        print("Computing CMC and mAP...")
         cmc,mAP=evaluate(distmat.T,q_pids,g_pids,q_cids,g_cids,max(ranks))
         print_cmc(cmc,color=True)
         print('mAP:%.2f'%(mAP*100))

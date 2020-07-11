@@ -3,9 +3,10 @@ import torch.nn as nn
 import torchvision
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
-from deep.models.utils import FlattenLayer,Norm1DLayer,HorizontalPool2d,seek_ks_3m
+sys.path.append(os.path.join(os.path.dirname(__file__),'../../'))
+from deep.models.utils import FlattenLayer,Norm1DLayer,HorizontalPool2d,seek_ks_3m,_weights_init,LambdaLayer
 from torchvision.models.resnet import Bottleneck
+import torch.nn.functional as F
 
 class ResNet50_Classify(nn.Module):
     '''最简单的基于ResNet50的分类网络，适用ID损失，但是注意最后一层并未做SoftMax'''
@@ -114,7 +115,7 @@ class ResNet50_PCB(nn.Module): #PCB's baseline, refer to
         self.ks=None
         self.conv1x1s=[]
         self.classifiers=[]
-        for i in range(self.outsize):
+        for i in range(self.outsize): #所有用到的（带参数的）网络层必须在init中预先声明，避免不必要的错误
             setattr(self,'conv1x1_%d'%i,nn.Conv2d(2048,256,kernel_size=1,stride=1,padding=0,bias=True))
             self.conv1x1s.append(getattr(self,'conv1x1_%d'%i))
             setattr(self,'classifier_%d'%i,nn.Linear(256,num_ids))
@@ -136,15 +137,22 @@ class ResNet50_PCB(nn.Module): #PCB's baseline, refer to
         else:
             return pt.cat(fs,dim=1)
 
+class ResNet56_jstl(nn.Module): #https://blog.csdn.net/qq_31347869/article/details/100566719
+    def __init__(self,num_ids,base_state_dict=None): #https://github.com/akamaster/pytorch_resnet_cifar10
+        super(ResNet56_jstl,self).__init__()
+        self.train_mode=True
+        resnet56=torchvision.models.resnet.ResNet(Bottleneck,[3,5,7,9],num_classes=64)
+        self.base=resnet56
+        if base_state_dict is not None:
+            self.base.load_state_dict(base_state_dict)
+        self.ide=nn.Linear(64,num_ids)
+
+    def forward(self,X):
+        if self.train_mode:
+            return self.ide(self.base(X))
+        else:
+            return self.base(X)
+
 if __name__=='__main__':
-    from utils import get_rest_params
-    net=ResNet50_PCB(721)
-    optimizer = pt.optim.Adam([{
-        'params':get_rest_params(net.base),'lr':0.1,'name':'base'
-    },{
-        'params':get_rest_params(net,['base']),'lr':0.01,'name':'rest'
-    }])
-    print(', '.join(['lr(%s)=%s'%(i.get('name'),i['lr']) for i in optimizer.param_groups]))
-    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=40,gamma=0.1)
-    print(scheduler.get_last_lr())
-    print(scheduler.optimizer)
+    net=ResNet56_jstl(10)
+    print(net)

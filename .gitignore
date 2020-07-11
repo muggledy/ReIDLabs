@@ -16,5 +16,7 @@
 /src/cycle_gan/datasets/*
 !/src/cycle_gan/datasets/.gitkeep
 /src/cycle_gan/out
+/src/segment/Deeplab_TF_demo/Output/*
+!/src/segment/Deeplab_TF_demo/Output/.gitkeep
 /.vscode/*
 **/__pycache__/

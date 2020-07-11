@@ -192,6 +192,20 @@ def get_rest_params(net,submodules=None): #譬如要获取网络中除第一个�
     rest_params=filter(lambda x:id(x) not in used_params+prelu_params,net.parameters())
     return rest_params
 
+def _weights_init(m): #net.apply(*)
+    classname = m.__class__.__name__
+    if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
+        pt.nn.init.kaiming_normal_(m.weight)
+
+class LambdaLayer(nn.Module): #有了这个类，譬如要添加flatten层，就可以这样写：
+                              #LambdaLayer(lambda X:X.view(X.size(0),-1))
+    def __init__(self, lambd):
+        super(LambdaLayer, self).__init__()
+        self.lambd = lambd
+
+    def forward(self, x):
+        return self.lambd(x)
+
 if __name__ == "__main__":
     k,s=seek_ks_3m(24,6)[:2]
     print(k,s)
