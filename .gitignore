@@ -10,6 +10,7 @@
 !/images/VIPeR.v1.0/
 !/images/split_market1501.py
 !/images/download_dataset.py
+!/images/extract_cuhk03.py
 /data/*
 !/data/.gitkeep
 !/data/lda_data_demo.mat

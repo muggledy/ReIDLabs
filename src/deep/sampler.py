@@ -72,7 +72,7 @@ class RandomIdSampler2(Sampler): #相较于RandomIdSampler，扩张epoch数据�
             for i in self.ids_list.values():
                 T.append(len(i))
             T=np.array(T)
-            print("Dataset statistics:")
+            print("Dataset statistics(about the img nums each person has):")
             print("  -----------------------------")
             print("   Max | Min | Avg | Med | Mod ") #最后两个是medium（中值）, mode（众数）
             print("  -----------------------------")

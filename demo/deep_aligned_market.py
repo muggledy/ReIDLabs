@@ -17,7 +17,7 @@ from deep.sampler import RandomIdSampler
 from deep.train import train,setup_seed
 from deep.test import test
 from deep.loss import AlignedTriLoss
-from deep.eval_metric import eval_market1501,eval_cmc_map
+from deep.eval_metric import eval_cmc_map
 from deep.models.utils import CheckPoint
 from functools import partial
 import torch as pt
@@ -32,18 +32,16 @@ if __name__=='__main__':
     sampler=partial(RandomIdSampler,num_instances=4)
     market1501=Market1501(dataset_dir)
     market1501.print_info()
-    train_iter,query_iter,gallery_iter \
-        =load_dataset(market1501,32,32,sampler=sampler)
+    train_iter,query_iter,gallery_iter=load_dataset(market1501,32,32,sampler=sampler)
 
-    net=ResNet50_Aligned(len(market1501.trainPids))
+    net=ResNet50_Aligned(len(set(list(zip(*market1501.trainSet))[1])))
     margin=0.3
     losses=(nn.CrossEntropyLoss(),AlignedTriLoss(margin))
 
-    lr,num_epochs=0.0002,200
+    lr,num_epochs=0.00002,230
     optimizer=pt.optim.Adam(net.parameters(),lr=lr,weight_decay=5e-04)
-    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=100,gamma=0.1)
+    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=150,gamma=0.1)
     
-    train(net,train_iter,losses,optimizer,num_epochs,scheduler, \
-        checkpoint=checkpoint,losses_name= \
-        ['softmaxLoss','globTriHardLoss','localTriHardLoss'],coeffis=None)
+    train(net,train_iter,losses,optimizer,num_epochs,scheduler,checkpoint=checkpoint, \
+        losses_name=['softmaxLoss','globTriHardLoss','localTriHardLoss'],coeffis=None)
     test(net,query_iter,gallery_iter,eval_cmc_map)

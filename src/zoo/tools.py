@@ -222,6 +222,12 @@ def get_right_and_junk_index(query_label, gallery_labels, query_camera_label=Non
 def calc_cmc_map(dist,prob_identities,gal_identities,prob_id_views,gal_id_views):
     '''dist's vertical axis indicates gal and horizontal prob. Same origin with 
        func evaluate_with_index'''
+    dist=np.array(dist) #these inputs must be ndarray, otherwise got error result
+    prob_identities=np.array(prob_identities)
+    gal_identities=np.array(gal_identities)
+    prob_id_views=np.array(prob_id_views)
+    gal_id_views=np.array(gal_id_views)
+
     gal_n,prob_n=dist.shape
     similarity=-dist
     total_cmc = np.zeros(gal_n)
@@ -390,99 +396,6 @@ class ProgressBar: #comes from https://www.jb51.net/article/156304.htm
             self.state="下载完成"
         print(self.__get_info(), end=end_str)
 
-class Crawler:
-    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' \
-             '(KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36 Edge/14.14393'}
-              
-    def __init__(self,url=None,save_path=None):
-        self.url=url
-        self.save_path=save_path
-        
-    def get(self,url=None,method='GET',**kwargs):
-        if url is not None:
-            self.url=url
-        elif self.url is None:
-            raise ValueError('Must give URL!')
-        if kwargs.get('headers') is None:
-            kwargs['headers']=self.headers
-        raise_error=kwargs.get('raise_error')
-        if raise_error is not None:
-            del kwargs['raise_error']
-        show_bar=kwargs.get('show_bar')
-        if show_bar is not None:
-            del kwargs['show_bar']
-        if show_bar: #如果给出show_bar参数为真，则会展示下载进度条，默认不展示
-            kwargs['stream']=True
-            chunk_size=kwargs.get('chunk_size')
-            if chunk_size is None: #在show_bar为真时，可以传递chunk_size和name参数
-                chunk_size=1024*1024 # 单次请求最大值（1MB）
-            else:
-                del kwargs['chunk_size']
-            name=kwargs.get('name')
-            if name is None:
-                name='未命名'
-            else:
-                del kwargs['name']
-            self.content=None
-            with closing(requests.request(method,self.url,**kwargs)) as response:
-                self.content_length = float(response.headers['content-length']) # 内容体总大小
-                self.content_type=response.headers['Content-Type']
-                progress = ProgressBar(name, 0, total=self.content_length)
-                for data in response.iter_content(chunk_size=chunk_size):
-                    progress.refresh(count=len(data))
-                    if self.content is None:
-                        self.content=data
-                    else:
-                        self.content+=data
-        else:
-            response=requests.request(method,self.url,**kwargs)
-            if raise_error: #如果给出raise_error参数为真，则在response!=200时抛出异常，默认不抛
-                response.raise_for_status()
-            if response.ok:
-                self.content_type=response.headers['Content-Type']
-                self.content_length=response.headers['Content-Length']
-                self.content=response.content
-                print('Get file[%s](%.2fM) from %s successfully!'%(self.content_type, \
-                    float(self.content_length)/1048576,self.url))
-            else:
-                print('Failed(%d)!'%response.status_code)
-            return self #返回爬虫自身
-        
-    def save(self,save_path=None):
-        if save_path is not None:
-            self.save_path=os.path.normpath(save_path)
-            if not os.path.exists(os.path.dirname(self.save_path)):
-                print('Create dir %s'%os.path.dirname(self.save_path))
-                os.makedirs(os.path.dirname(self.save_path))
-        elif self.save_path is None:
-            self.save_path=os.path.join(getcwd(),'result') #如果没有给出保存路径，则默认保存到此函数的
-                                                           #调用者所在目录下名为result.<suffix>的文件下
-        suffix=filetype(self.content) #可以通过文件头标识判断，这种方式更准确
-                                      #https://www.cnblogs.com/senior-engineer/p/9541719.html
-        if suffix=='unknown':
-            suffix=self.content_type.split('/')[-1] #获取文件后缀，用于辅助上面的文件头标识判断
-            if suffix=='x-rar-compressed':
-                suffix='rar'
-            else:
-                pass
-        self.save_file_suffix=suffix
-        if not self.save_path.lower().endswith(suffix.lower()): #注意这边会自动添加后缀！
-            self.save_path+='.%s'%suffix
-        self.save_path=os.path.normpath(self.save_path)
-        with open(self.save_path,'wb') as f:
-            f.write(self.content)
-        print('Save to %s'%self.save_path)
-        
-    def show_img(self): #如果获取的是图片，可以调用此方法
-        img=Image.open(BytesIO(self.content))
-        img.show()
-        
-    def play_audio(self): #https://pythonbasics.org/python-play-sound/
-        Audio().play(self.content)
-        
-    def __call__(self,*args,**kwargs): #这些参数将如数传递给get内部的request函数
-        return self.get(*args,**kwargs)
-
 def unzip(file_path,save_dir,file_type=None):
     if file_type is None:
         file_type=file_path.split('.')[-1]
@@ -499,22 +412,178 @@ def unzip(file_path,save_dir,file_type=None):
         raise ValueError('Invalid file type(%s?), Must be zip or rar!'%file_type)
     print('Extracted %s into %s'%(file_path,save_dir))
 
-def split_dataset_trials(pids,cids,dataset,trials=10): #我将提供此处所有数据集的下载
+class Crawler:
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' \
+             '(KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36 Edge/14.14393'}
+              
+    def __init__(self,url=None,save_path=None):
+        self.url=url
+        self.save_path=save_path
+        
+    def get(self,url=None,method='GET',**kwargs): #最初设计用于下载诸如图片、音乐、压缩包等（二进制）文件，
+                                                  #若用于网页则会报错，譬如响应头没有content-length等属性
+        if url is not None:
+            self.url=url
+        elif self.url is None:
+            raise ValueError('Must give URL!')
+        if kwargs.get('headers') is None:
+            kwargs['headers']=self.headers
+        raise_error=kwargs.get('raise_error')
+        if raise_error is not None:
+            del kwargs['raise_error']
+        show_bar=kwargs.get('show_bar')
+        if show_bar is not None:
+            del kwargs['show_bar']
+        if show_bar: #如果给出show_bar参数为真，则会展示下载进度条，默认不展示
+            kwargs['stream']=True
+            chunk_size=kwargs.get('chunk_size')
+            if chunk_size is None: #只有在show_bar为真时，才可以传递chunk_size和name参数
+                chunk_size=1024*1024 # 单次请求最大值设为1MB
+            else:
+                del kwargs['chunk_size']
+            name=kwargs.get('name')
+            if name is None:
+                name='未命名'
+            else:
+                del kwargs['name']
+            with closing(requests.request(method,self.url,**kwargs)) as response:
+                if raise_error:
+                    response.raise_for_status()
+                self.ok=response.ok
+                if self.ok:
+                    self.content=None
+                    self.content_length = float(response.headers['content-length']) # 内容体总大小
+                    self.content_type=response.headers['Content-Type']
+                    progress = ProgressBar(name, 0, total=self.content_length)
+                    for data in response.iter_content(chunk_size=chunk_size):
+                        progress.refresh(count=len(data))
+                        if self.content is None:
+                            self.content=data
+                        else:
+                            self.content+=data
+                else:
+                    print('Crawler Failed(%d) from %s!'%(response.status_code,self.url))
+        else:
+            print('Downloading from %s...'%self.url)
+            response=requests.request(method,self.url,**kwargs)
+            if raise_error: #如果给出raise_error参数为真，则在response!=200时抛出异常，默认不抛
+                response.raise_for_status()
+            self.ok=response.ok
+            if self.ok:
+                self.content_type=response.headers['Content-Type']
+                self.content_length=response.headers['Content-Length']
+                self.content=response.content
+                print('Get response[%s](%.2fM) successfully!'%(self.content_type, \
+                    float(self.content_length)/1048576))
+            else:
+                print('Crawler Failed(%d)!'%response.status_code)
+            return self #返回爬虫自身
+        
+    def save(self,save_path=None):
+        if self.ok:
+            if save_path is not None:
+                self.save_path=os.path.normpath(save_path)
+                if not os.path.exists(os.path.dirname(self.save_path)):
+                    print('Create dir %s'%os.path.dirname(self.save_path))
+                    os.makedirs(os.path.dirname(self.save_path))
+            elif self.save_path is None:
+                self.save_path=os.path.join(getcwd(),'result') #如果没有给出保存路径，则默认保存到此函数的
+                                                               #调用者所在目录下名为result.<suffix>的文件下
+            suffix=filetype(self.content) #可以通过文件头标识判断，这种方式更准确
+                                          #https://www.cnblogs.com/senior-engineer/p/9541719.html
+            if suffix=='unknown':
+                suffix=self.content_type.split('/')[-1] #从响应头中获取文件后缀，用于辅助上面的文件头标识判断法
+                if suffix=='x-rar-compressed':
+                    suffix='rar'
+                else:
+                    pass
+            self.save_file_suffix=suffix
+            if not self.save_path.lower().endswith(suffix.lower()): #注意这边会自动添加后缀！
+                self.save_path+='.%s'%suffix
+            self.save_path=os.path.normpath(self.save_path)
+            with open(self.save_path,'wb') as f:
+                f.write(self.content)
+            print('Save to %s'%self.save_path)
+        else:
+            print('Save Nothing(Crawler Failed)!')
+        
+    def show_img(self): #如果获取的是图片，可以调用此方法
+        if self.ok:
+            img=Image.open(BytesIO(self.content))
+            img.show()
+        else:
+            print('Show Nothing(Crawler Failed)!')
+        
+    def play_audio(self): #https://pythonbasics.org/python-play-sound/
+        if self.ok:
+            Audio().play(self.content)
+        else:
+            print('Play Nothing(Crawler Failed)!')
+
+    def unzip(self,save_dir=None): #注意unzip之前必须先save压缩文件！
+        if self.ok:
+            if not os.path.exists(self.save_path):
+                raise ValueError('Must save the rar/zip file firstly, then do unzip!')
+            if save_dir is not None:
+                save_dir=os.path.normpath(save_dir)
+            else: #默认解压到save_path所在目录
+                save_dir=os.path.dirname(self.save_path)
+            if not os.path.exists(save_dir):
+                print('Create dir %s'%save_dir)
+                os.makedirs(save_dir)
+            unzip(self.save_path,save_dir,self.save_file_suffix)
+        else:
+            print('Extract Nothing(Crawler Failed)!')
+        
+    def __call__(self,*args,**kwargs): #这些参数将如数传递给get内部的request函数
+        return self.get(*args,**kwargs)
+
+def split_dataset_trials(pids,cids,dataset,trials=10): #通过/images/download_dataset.py下载这些数据集，
+                                                       #注意是根据其在Windows下的读取顺序设计的
     pids=norm_labels(pids)
     cids=norm_labels(cids)
-    if dataset=='viper':
+    if dataset in ['viper','cuhk01','prid_single']:
+        if dataset=='viper' and (len(pids)!=1264 or len(cids)!=1264 or len(set(pids))!=632 or len(set(cids))!=2): #基本检查
+            raise ValueError('Invalid VIPeR dataset!')
+        elif dataset=='cuhk01' and (len(pids)!=3884 or len(cids)!=3884 or len(set(pids))!=971 or len(set(cids))!=2):
+            raise ValueError('Invalid CUHK01 dataset!')
+        elif dataset=='prid_single' and (len(pids)!=(200+749) or len(cids)!=(200+749) or len(set(pids))!=749 or len(set(cids))!=2):
+            raise ValueError('Invalid PRID(single) dataset!')
         cam_a_inds=np.where(cids==0)[0]
         cam_b_inds=np.where(cids==1)[0]
+        if dataset=='prid_single' and (len(cam_a_inds)>len(cam_b_inds)):
+            cam_a_inds,cam_b_inds=cam_b_inds,cam_a_inds #不同于viper既可以摄像头A作probe，也可以摄像头B作probe，prid只能是小的那个作probe
+        
         cam_a_sorted_by_pids_inds=cam_a_inds[np.argsort(pids[cam_a_inds])]
         cam_b_sorted_by_pids_inds=cam_b_inds[np.argsort(pids[cam_b_inds])]
         for _ in range(trials):
-            p=np.random.permutation(632)
-            ptrain,ptest=p[:316],p[316:]
+            if dataset=='viper':
+                p=np.random.permutation(632)
+                ptrain,ptest=p[:316],p[316:] #VIPeR有632个行人，每个行人在总共两个摄像头下各自有一张图像，
+                                             #挑出316个行人数据作为训练集，剩下316个作为测试集
+            elif dataset=='cuhk01':
+                p=np.random.permutation(485+486)
+                ptrain,ptest=(p[:485]*2)[:,None],(p[485:]*2)[:,None] #CUHK01有971个行人，每个行人在总计两个摄像头下各自有两张
+                                                                     #图像，挑出485个行人数据作为训练集，剩下486个作为测试集
+                ptrain=np.hstack((ptrain,ptrain+1)).flatten()
+                ptest=np.hstack((ptest,ptest+1)).flatten()
+            elif dataset=='prid_single': #prid(single)数据集不同于viper或cuhk01，虽然也是两个摄像头，但是不同摄像头下行人图像数量不同，
+                                         #摄像头A（作为probe）下有385个行人，摄像头B（作为gallery）下有749个行人，只有前200个行人同时出
+                                         #现在两个交叉摄像头下，摄像头A和摄像头B下的图像总数分别为385和749，也就是说，每个行人在某一摄像
+                                         #头下最多有且只有一张图像。训练时，从交叉摄像头下共有的200个行人中挑出100个行人总计两百张图像作
+                                         #为训练集，虽然摄像头A下有385个行人，但是其中185个从未出现在摄像头B下，在测试中也不会使用（训练
+                                         #时也用不到），即仅将剩下的100个行人作为probe，而摄像头B下剩余的649个行人则全部作为gallery
+                p=np.random.permutation(200)
+                ptrain,ptest=p[:100],p[100:]
+            
             ret={}
             ret['indsAtrain']=cam_a_sorted_by_pids_inds[ptrain]
             ret['indsBtrain']=cam_b_sorted_by_pids_inds[ptrain]
             ret['indsAtest']=cam_a_sorted_by_pids_inds[ptest]
-            ret['indsBtest']=cam_b_sorted_by_pids_inds[ptest]
+            if dataset=='prid_single':
+                ret['indsBtest']=cam_b_sorted_by_pids_inds[ptest.tolist()+list(range(200,749))]
+            else:
+                ret['indsBtest']=cam_b_sorted_by_pids_inds[ptest]
             ret['labelsAtrain']=pids[ret['indsAtrain']]
             ret['labelsBtrain']=pids[ret['indsBtrain']]
             ret['labelsAtest']=pids[ret['indsAtest']]
@@ -524,62 +593,15 @@ def split_dataset_trials(pids,cids,dataset,trials=10): #我将提供此处所有
             ret['camlabelsAtest']=cids[ret['indsAtest']]
             ret['camlabelsBtest']=cids[ret['indsBtest']]
             yield ret
-    elif dataset=='cuhk01':
-        cam_a_inds=np.where(cids==0)[0]
-        cam_b_inds=np.where(cids==1)[0]
-        cam_a_sorted_by_pids_inds=cam_a_inds[np.argsort(pids[cam_a_inds])]
-        cam_b_sorted_by_pids_inds=cam_b_inds[np.argsort(pids[cam_b_inds])]
-        for _ in range(trials):
-            p=np.random.permutation(485+486)
-            ptrain,ptest=(p[:485]*2)[:,None],(p[485:]*2)[:,None]
-            ptrain=np.hstack((ptrain,ptrain+1)).flatten()
-            ptest=np.hstack((ptest,ptest+1)).flatten()
-            ret={}
-            ret['indsAtrain']=cam_a_sorted_by_pids_inds[ptrain]
-            ret['indsBtrain']=cam_b_sorted_by_pids_inds[ptrain]
-            ret['indsAtest']=cam_a_sorted_by_pids_inds[ptest]
-            ret['indsBtest']=cam_b_sorted_by_pids_inds[ptest]
-            ret['labelsAtrain']=pids[ret['indsAtrain']]
-            ret['labelsBtrain']=pids[ret['indsBtrain']]
-            ret['labelsAtest']=pids[ret['indsAtest']]
-            ret['labelsBtest']=pids[ret['indsBtest']]
-            ret['camlabelsAtrain']=cids[ret['indsAtrain']]
-            ret['camlabelsBtrain']=cids[ret['indsBtrain']]
-            ret['camlabelsAtest']=cids[ret['indsAtest']]
-            ret['camlabelsBtest']=cids[ret['indsBtest']]
-            yield ret
-    elif dataset=='cuhk02':
+    elif dataset=='':
         pass
         
 if __name__=='__main__':
-    import scipy.io as scio
-    feadir=r'C:\Users\Administrator\Desktop\CAMEL-master'
-    # viper_pids=list(range(632))*2
-    # viper_cids=[1]*632+[2]*632
-    # ret=split_dataset_trials(viper_pids,viper_cids,'viper')
-    # viperfeafile=os.path.join(feadir,'viper_jstl64.mat')
-    # viperfea=scio.loadmat(viperfeafile)['feature']
-    # print(viperfea.shape)
-    ### viper通过camel提供的matlab提取jstl特征后，直接用viperjstl分支下的split.m分割，然后执行demo_ours.m即可
-    cuhk01_pids=np.broadcast_to(np.arange(485+486)[:,None],(485+486,4)).flatten().tolist()
-    cuhk01_cids=[1,1,2,2]*(485+486)
-    ret=split_dataset_trials(cuhk01_pids,cuhk01_cids,'cuhk01')
-    cuhk01feafile=os.path.join(feadir,'cukh01_jstl64.mat')
-    cuhk01feasavefile=os.path.join(feadir,'cuhk01_jstl64_save.mat')
-    cuhk01fea=scio.loadmat(cuhk01feafile)['feature']
-    save_data={}
-    for trial_num,trial_data in enumerate(ret,1):
-        save_data['trial%d'%trial_num]={'featAtrain':cuhk01fea[:,trial_data['indsAtrain']],\
-            'featBtrain':cuhk01fea[:,trial_data['indsBtrain']],\
-                'featAtest':cuhk01fea[:,trial_data['indsAtest']],\
-                    'featBtest':cuhk01fea[:,trial_data['indsBtest']],
-                    'labelsAtrain':trial_data['labelsAtrain']+1,
-                    'labelsBtrain':trial_data['labelsBtrain']+1,
-                    'labelsAtest':trial_data['labelsAtest']+1,
-                    'labelsBtest':trial_data['labelsBtest']+1,
-                    'camlabelsAtrain':trial_data['camlabelsAtrain']+1,
-                    'camlabelsBtrain':trial_data['camlabelsBtrain']+1,
-                    'camlabelsAtest':trial_data['camlabelsAtest']+1,
-                    'camlabelsBtest':trial_data['camlabelsBtest']+1}
-    scio.savemat(cuhk01feasavefile,save_data)
-    ### 提取jstl特征后，由cuhk01jstl分支下的split对cuhk01_jstl64_save.mat做组织，得到CUHK01_jstl64_split.mat，再执行demo_ours.m即可
+    '''
+    url='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBZ204d3BjSVhDanNnNHRuV2VyWDNxWk9BM0JBcUE=.jpg'
+    crawler=Crawler(url)
+    crawler(show_bar=True)
+    crawler.show_img()
+    '''
+    t=split_dataset_trials(list(range(749))+list(range(200)),[0]*749+[1]*200,'prid_single')
+    print()

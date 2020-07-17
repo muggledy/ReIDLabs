@@ -6,6 +6,25 @@ sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
 from zoo.tools import measure_time,print_cmc,cosine_dist
 import numpy as np
 
+def extract_feats(net,data_iter,device=None):
+    device=pt.device('cuda' if pt.cuda.is_available() else 'cpu') if device is None else device
+    net=net.to(device)
+    net.eval()
+    if isinstance(net,nn.DataParallel):
+        net.module.train_mode=False
+    else:
+        net.train_mode=False
+    feats=[]
+    with pt.no_grad():
+        for batch,*_ in data_iter:
+            batch=batch.to(device)
+            feat=net(batch).data.cpu()
+            feats.append(feat)
+        feats=pt.cat(feats,0)
+    feats=feats.numpy() #(n,d)
+    print('Extracted features%s successfully'%str(feats.shape))
+    return feats.T
+
 @measure_time
 def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],device=None,save_galFea=None):
     '''如果gallery_iter不是DataLoader对象，而是普通路径字符串，表示gallery特征将从文件加载。

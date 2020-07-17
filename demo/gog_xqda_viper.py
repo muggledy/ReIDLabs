@@ -46,3 +46,28 @@ print('CMC:')
 print_cmc(c_mean,color=True)
 print('time consumes:',time.time()-t1)
 plot_cmc(c_mean,['viper'],verbose=True)
+
+'''
+probe,gallery=get_gog_viper()
+probFea=normalize(probe.T)
+galFea=normalize(gallery.T)
+feats=np.concatenate((probFea,galFea),axis=1)
+
+from zoo.tools import split_dataset_trials
+
+cs=[]
+for trial in split_dataset_trials(list(range(632))*2,[0]*632+[1]*632,'viper',trials=5):
+    probFea1=feats[:,trial['indsAtrain']]
+    galFea1=feats[:,trial['indsBtrain']]
+    W,M,*_=xqda(probFea1,galFea1,trial['labelsAtrain'],trial['labelsBtrain'])
+    probFea2=feats[:,trial['indsAtest']]
+    galFea2=feats[:,trial['indsBtest']]
+    dist=mah_dist(M,(W.T).dot(probFea2),(W.T).dot(galFea2))
+    c=calc_cmc(dist.T,trial['labelsAtest'],trial['labelsBtest'],100)
+    cs.append(c)
+
+c_mean=np.mean(np.array(cs),axis=0)
+print('CMC:')
+print_cmc(c_mean,color=True)
+plot_cmc(c_mean,['viper'],verbose=True)
+'''

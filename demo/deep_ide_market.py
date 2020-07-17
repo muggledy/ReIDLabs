@@ -30,12 +30,12 @@ if __name__=='__main__': #话说为什么这部分代码一定要放在__main__�
     market1501.print_info()
     train_iter,query_iter,gallery_iter=load_dataset(market1501,32,32)
     
-    net=ResNet50_Classify(len(market1501.trainPids))
+    net=ResNet50_Classify(len(set(list(zip(*market1501.trainSet))[1]))) #传入训练集的ID数量
 
     loss=nn.CrossEntropyLoss()
-    lr,num_epochs=0.0003,10
+    lr,num_epochs=0.0003,20
     optimizer=pt.optim.Adam(net.parameters(),lr=lr,weight_decay=5e-04)
-    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=6,gamma=0.1) #学习率衰减，参考：https://zhuanlan.zhihu.com/p/93624972
+    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=10,gamma=0.1) #学习率衰减，参考：https://zhuanlan.zhihu.com/p/93624972
                                                                             #注意checkpoint无法继续上次的step_size衰减过程，如果权重衰
                                                                             #减地厉害，请下次执行的时候人为修改为上次结束时的学习率，以
                                                                             #降低影响
@@ -43,7 +43,7 @@ if __name__=='__main__': #话说为什么这部分代码一定要放在__main__�
                                                                                        #train，由于epoch已达最大，所以实际并不会进行训练
     test(net,query_iter,gallery_iter,eval_cmc_map)
 
-    #展示匹配结果（最好放单独文件执行，因为随机种子固定了，每次都会展示相同几幅图片）
+    #展示匹配结果（最好放单独文件执行或者取消最开始固定的随机种子，否则每次都会展示相同几幅图片）
     query_dir=os.path.join(dataset_dir,'./query')
     gallery_dir=os.path.join(dataset_dir,'./bounding_box_test')
     gal_savedir=os.path.join(os.path.dirname(__file__),'../data/market1501_resnetIDE_gallery.npz')

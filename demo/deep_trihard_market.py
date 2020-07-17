@@ -14,7 +14,7 @@ from deep.sampler import RandomIdSampler,RandomIdSampler2
 from deep.train import train,setup_seed
 from deep.test import test
 from deep.loss import TripletHardLoss
-from deep.eval_metric import eval_market1501,eval_cmc_map
+from deep.eval_metric import eval_cmc_map
 from deep.models.utils import CheckPoint
 from functools import partial
 import torch as pt
@@ -43,17 +43,18 @@ if __name__=='__main__':
     checkpoint=CheckPoint()
     checkpoint.load('ResNet50_Classify_Metric(%s).tar'%cpflag)
 
-    sampler=partial(RandomIdSampler2,num_instances=4,num_paddings=None) #如果不想使用num_paddings扩充，直接置为None即可
+    sampler=partial(RandomIdSampler2,num_instances=4,num_paddings=8, \
+        statistics=True) #如果不想使用num_paddings扩充，直接置为None即可
     market1501=Market1501(dataset_dir)
     market1501.print_info()
     train_iter,query_iter,gallery_iter \
         =load_dataset(market1501,32,32,sampler=sampler) #注意batch_size必须是num_instances的整数倍
     
-    net=ResNet50_Classify_Metric(len(market1501.trainPids),loss=used_losses)
+    net=ResNet50_Classify_Metric(len(set(list(zip(*market1501.trainSet))[1])),loss=used_losses)
 
-    lr,num_epochs=0.0003,150
+    lr,num_epochs=0.0003,30
     optimizer=pt.optim.Adam(net.parameters(),lr=lr,weight_decay=5e-04)
-    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=60,gamma=0.1)
+    scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=12,gamma=0.1)
     
     train(net,train_iter,losses,optimizer,num_epochs,scheduler, \
         checkpoint=checkpoint,losses_name=losses_name,coeffis=None)

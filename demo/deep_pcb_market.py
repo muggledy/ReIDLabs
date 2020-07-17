@@ -6,7 +6,7 @@ mAP:72.66
 
 from initial import *
 from deep.data_manager import Market1501
-from deep.data_loader import load_dataset
+from deep.data_loader import load_dataset,default_train_transforms,default_test_transforms
 from deep.models.ResNet import ResNet50_PCB
 from deep.train import train,setup_seed
 from deep.test import test
@@ -25,14 +25,12 @@ if __name__=='__main__':
     market1501=Market1501(dataset_dir)
     market1501.print_info()
 
-    normalizer=T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))
-    train_transforms=[T.Resize((384,128)),T.RandomHorizontalFlip(),T.ToTensor(), \
-            normalizer]
-    test_transforms=[T.Resize((384,128)),T.ToTensor(),normalizer]
+    default_train_transforms[0]=T.Resize((384,128))
+    default_test_transforms[0]=T.Resize((384,128))
     train_iter,query_iter,gallery_iter=load_dataset(market1501,32,32, \
-        train_transforms=train_transforms,test_transforms=test_transforms)
+        train_transforms=default_train_transforms,test_transforms=default_test_transforms)
     
-    net=ResNet50_PCB(len(market1501.trainPids))
+    net=ResNet50_PCB(len(set(list(zip(*market1501.trainSet))[1])))
 
     losses=[]
     for i in range(6):

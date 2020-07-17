@@ -7,7 +7,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
 from gog.utils import plot_patches
 from zoo.cprint import colors
-from deep.data_manager import load_query_gallery
+from deep.data_manager import load_query_gallery,Ana78
 from deep.data_loader import load_dataset
 from deep.eval_metric import eval_cmc_map
 from deep.test import test
@@ -27,13 +27,25 @@ def set_img_color_frame(img,color=None,width=2):
     img[:,0:width,:]=color
     img[:,-width:,:]=color
 
-def plot_match(net,query_dir,gallery_dir,checkpoint,galfeas_path=None,query_num=10,gallery_num=20, \
-               batch_size=(1,32),resize=(128,256)):
+def plot_match(net,query_dir=None,gallery_dir=None,checkpoint=None,galfeas_path=None,query_num=10, \
+               gallery_num=20,batch_size=(1,32),resize=(128,256),**kwargs):
     '''注意query最多query_num个，如果query_dir下超过query_num个图片，则随机挑选query_num个，另外只显示
        前gallery_num个gallery匹配。resize是因为图像的尺寸可能不一致'''
-    query_gallery=load_query_gallery(query_dir,gallery_dir,query_num)
+    query_gallery=kwargs.get('query_gallery')
+    analyse=kwargs.get('analyse',Ana78(r'([-\d]+)_c(\d)')) #默认值还是为market1501保留
+    if not query_gallery: #在某些特殊的情况下，query_gallery难以自动构造，譬如数据集图片名称中只含行人ID不含
+                          #摄像头ID，相应的analyse也只能获取行人ID，摄像头ID必须手动设置，此时我们直接在外面
+                          #构造好query_gallery，然后传递给plot_match，示例见deep_jstl.py
+        query_gallery=load_query_gallery(query_dir,gallery_dir,query_num,analyse)
+        # query_gallery.print_info()
+    else:
+        if query_num<len(query_gallery.querySet):
+            querySet=[]
+            for i in np.random.permutation(len(query_gallery.querySet))[:query_num]:
+                    querySet.append(query_gallery.querySet[i])
+            query_gallery.querySet=querySet
     query_iter,gallery_iter=load_dataset(query_gallery,test_batch_size=batch_size,notrain=True)
-    
+
     if pt.cuda.is_available():
         net=nn.DataParallel(net) #之前写的所有的模型训练的时候只要GPU存在都是先做了DataParallel，
                                  #然后保存的模型参数，所以这边要加载参数也必须先DataParallel

@@ -118,7 +118,7 @@ def vis_segmentation(image,seg_map,labelNames):
   pyplot.title('input image')
 
   pyplot.subplot(grid_spec[1])
-  seg_image = label_to_color_image(seg_map).astype(numpy.uint8);
+  seg_image = label_to_color_image(seg_map).astype(numpy.uint8)
   pyplot.imshow(seg_image)
   pyplot.axis('off')
   pyplot.title('segmentation map')
@@ -141,48 +141,48 @@ def vis_segmentation(image,seg_map,labelNames):
   pyplot.show()
 
 def run_visualization(deepLabModel,imageFileName,labelNames):
-  inputImage = Image.open(imageFileName);
-  print('running deeplab on image %s...' % imageFileName);
-  resized_im, seg_map = deepLabModel.run(inputImage);
-  vis_segmentation(resized_im, seg_map,labelNames);
+  inputImage = Image.open(imageFileName)
+  print('running deeplab on image %s...' % imageFileName)
+  resized_im, seg_map = deepLabModel.run(inputImage)
+  vis_segmentation(resized_im, seg_map,labelNames)
 
 def generateOverlayComparisonImage(rawImage, imageMask, comparisonImageFileName):
-    imageOverlay = getImageOverlay(rawImage, imageMask);
-    concatenatedImage = numpy.concatenate((rawImage, imageMask, imageOverlay), axis=1);
-    cv2.imwrite(comparisonImageFileName, cv2.cvtColor(concatenatedImage, cv2.COLOR_BGR2RGB));
+    imageOverlay = getImageOverlay(rawImage, imageMask)
+    concatenatedImage = numpy.concatenate((rawImage, imageMask, imageOverlay), axis=1)
+    cv2.imwrite(comparisonImageFileName, cv2.cvtColor(concatenatedImage, cv2.COLOR_BGR2RGB))
 
 def generateForegroundAndBackGroundComparisonImage(rawImage, foregroundImage,backgroundImage, comparisonImageFileName):
-    concatenatedImage = numpy.concatenate((rawImage, foregroundImage, backgroundImage), axis=1);
-    cv2.imwrite(comparisonImageFileName, cv2.cvtColor(concatenatedImage, cv2.COLOR_BGR2RGB));
+    concatenatedImage = numpy.concatenate((rawImage, foregroundImage, backgroundImage), axis=1)
+    cv2.imwrite(comparisonImageFileName, cv2.cvtColor(concatenatedImage, cv2.COLOR_BGR2RGB))
 
 def getImageOverlay(rawImage,imageMask):
-    imageOverlay = cv2.addWeighted(rawImage, 0.5, imageMask, 0.5, 0);
-    return imageOverlay;
+    imageOverlay = cv2.addWeighted(rawImage, 0.5, imageMask, 0.5, 0)
+    return imageOverlay
 
 def getRawImageAndMask(inputImage):
-    resized_im, seg_map = deepLabModel.run(inputImage);
-    rawImage=numpy.array(resized_im);
-    return rawImage, seg_map;
+    resized_im, seg_map = deepLabModel.run(inputImage)
+    rawImage=numpy.array(resized_im)
+    return rawImage, seg_map
 
 def getForegroundFilter(seg_map):
-    foregroundFilter=numpy.where(seg_map != 0, 1, 0);
-    return foregroundFilter;
+    foregroundFilter=numpy.where(seg_map != 0, 1, 0)
+    return foregroundFilter
 
 def getForegroundImage(rawImage, seg_map):
-    foregroundFilter=getForegroundFilter(seg_map);
-    foreGroundImage=numpy.empty((seg_map.shape[0],seg_map.shape[1],3),dtype='uint8');
-    foreGroundImage[:,:,0]=rawImage[:,:,0]*foregroundFilter;
-    foreGroundImage[:, :, 1] = rawImage[:, :, 1] * foregroundFilter;
-    foreGroundImage[:, :, 2] = rawImage[:, :, 2] * foregroundFilter;
-    return foreGroundImage;
+    foregroundFilter=getForegroundFilter(seg_map)
+    foreGroundImage=numpy.empty((seg_map.shape[0],seg_map.shape[1],3),dtype='uint8')
+    foreGroundImage[:,:,0]=rawImage[:,:,0]*foregroundFilter
+    foreGroundImage[:, :, 1] = rawImage[:, :, 1] * foregroundFilter
+    foreGroundImage[:, :, 2] = rawImage[:, :, 2] * foregroundFilter
+    return foreGroundImage
 
 def getBackgroundImage(rawImage, seg_map):
-    backgroundFilter=numpy.where(seg_map == 0, 1, 0);
-    backGroundImage=numpy.empty((seg_map.shape[0],seg_map.shape[1],3),dtype='uint8');
-    backGroundImage[:,:,0]=rawImage[:,:,0]*backgroundFilter;
-    backGroundImage[:, :, 1] = rawImage[:, :, 1] * backgroundFilter;
-    backGroundImage[:, :, 2] = rawImage[:, :, 2] * backgroundFilter;
-    return backGroundImage;
+    backgroundFilter=numpy.where(seg_map == 0, 1, 0)
+    backGroundImage=numpy.empty((seg_map.shape[0],seg_map.shape[1],3),dtype='uint8')
+    backGroundImage[:,:,0]=rawImage[:,:,0]*backgroundFilter
+    backGroundImage[:, :, 1] = rawImage[:, :, 1] * backgroundFilter
+    backGroundImage[:, :, 2] = rawImage[:, :, 2] * backgroundFilter
+    return backGroundImage
 
 
 if __name__=='__main__':
@@ -219,8 +219,8 @@ if __name__=='__main__':
     print('model loaded successfully!')
 
 
-    outputDirectory=os.path.join(os.getcwd(),'Output')
-    inputDirectory=os.path.join(os.getcwd(),'Input')
+    outputDirectory=os.path.join(os.path.dirname(__file__),'Output')
+    inputDirectory=os.path.join(os.path.dirname(__file__),'Input')
 
     inputImageFileNames=os.listdir(inputDirectory)
     for imageFileName in inputImageFileNames:

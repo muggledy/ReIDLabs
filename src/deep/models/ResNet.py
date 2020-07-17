@@ -141,10 +141,15 @@ class ResNet56_jstl(nn.Module): #https://blog.csdn.net/qq_31347869/article/detai
     def __init__(self,num_ids,base_state_dict=None): #https://github.com/akamaster/pytorch_resnet_cifar10
         super(ResNet56_jstl,self).__init__()
         self.train_mode=True
-        resnet56=torchvision.models.resnet.ResNet(Bottleneck,[3,5,7,9],num_classes=64)
-        self.base=resnet56
-        if base_state_dict is not None:
-            self.base.load_state_dict(base_state_dict)
+        # resnet56=torchvision.models.resnet.ResNet(Bottleneck,[3,5,7,9],num_classes=64)
+        resnet56=torchvision.models.resnet50(pretrained=True)
+        self.base=nn.Sequential(
+            *(list(resnet56.children())[:-1]),
+            FlattenLayer(),
+            nn.Linear(2048,64)
+        )
+        # if base_state_dict is not None:
+        #     self.base.load_state_dict(base_state_dict)
         self.ide=nn.Linear(64,num_ids)
 
     def forward(self,X):

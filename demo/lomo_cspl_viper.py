@@ -4,7 +4,7 @@ I don't know where the problem is?
 '''
 
 from initial import *
-from zoo.viper import get_lomo_viper
+from zoo.viper import get_lomo_viper,get_gog_viper
 from zoo.cspl import cspl
 from sklearn.decomposition import PCA
 
@@ -15,6 +15,7 @@ numFlods=10
 t1=time.time()
 # --Stage1: get lomo features--
 probFea,galFea=get_lomo_viper() #mask='ellipse' no help, see note 2
+# probFea,galFea=get_gog_viper()
 
 '''use official lomo features(with retinex), compared to mine, no difference
 import scipy.io as sio
