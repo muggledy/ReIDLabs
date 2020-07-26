@@ -9,14 +9,14 @@ from zoo.cprint import cprint,cprint_out
 from sklearn.decomposition import PCA
 
 cwd=getcwd(__file__)
-cam_a_dir=os.path.normpath(os.path.join(cwd,'../../images/VIPeR.v1.0/cam_a'))
-cam_b_dir=os.path.normpath(os.path.join(cwd,'../../images/VIPeR.v1.0/cam_b'))
+cam_a_dir=os.path.normpath(os.path.join(cwd,'../../images/VIPeR.v1.0/cam_a')) #probe
+cam_b_dir=os.path.normpath(os.path.join(cwd,'../../images/VIPeR.v1.0/cam_b')) #gallery
 
 def pca_reduct_dim(probFea,galFea,n_components,W_file=None):
-    '''input probe(n,d) and gallery(n,d), output probe(d',n) and gallery(d',n) 
+    '''input probe(n,d) and gallery(n,d), output probe(n,d') and gallery(n,d') 
        after dimension reduction'''
     print('probe features(before pca):%s, gallery features(before pca):%s'% \
-                                    (probFea.shape[::-1],galFea.shape[::-1]))
+                                    (probFea.shape,galFea.shape))
     if W_file==None or (not os.path.exists(W_file)):
         pca=PCA(n_components=n_components)
         probFea=pca.fit_transform(probFea)
@@ -25,25 +25,23 @@ def pca_reduct_dim(probFea,galFea,n_components,W_file=None):
         galFea=pca.fit_transform(galFea)
         galEnergy=sum(pca.explained_variance_ratio_)
         galWT=pca.components_
-        probFea=probFea.T
-        galFea=galFea.T
         np.savez(W_file,probWT=probWT,probEnergy=probEnergy,galWT=galWT,galEnergy=galEnergy)
     else:
         print('get pca\'s project matrix(n_components=%d) from local'%n_components)
         data=np.load(W_file)
         probWT,probEnergy=data['probWT'],data['probEnergy']
-        probFea=probWT.dot(probFea.T)
+        probFea=probWT.dot(probFea.T).T
         galWT,galEnergy=data['galWT'],data['galEnergy']
-        galFea=galWT.dot(galFea.T)
+        galFea=galWT.dot(galFea.T).T
     print( \
         'reduct probe dimension(energy:%.2f%%):%s, reduct gallery dimension(energy:%.2f%%):%s' \
                           %(probEnergy,probFea.shape,galEnergy,galFea.shape))
     return probFea,galFea
 
 def get_lomo_viper(pca_n_components=None,mask=None):
-    '''return probe(632*26960,cam_a) and gallery(632*26960,cam_b) of VIPeR dataset's 
-       LOMO descriptors, if pca_n_components!=None, e.g. 100, func will return probe
-       (100,632) and gallery(100,632) after PCA'''
+    '''return probe(632,26960) and gallery(632,26960) of VIPeR's LOMO descriptors, 
+       if pca_n_components!=None, e.g. 100, func will return probe(632,100) and 
+       gallery(632,100) after PCA'''
     if mask=='ellipse':
         cprint_out('use ellipse mask!')
         feat_file=os.path.join(cwd,'../../data/lomo_ellipse_features_viper.npz')
@@ -107,7 +105,7 @@ def get_salience_patch_viper():
         probe,gallery,nx,ny=data['probe'],data['gallery'],data['nx'],data['ny']
     return probe,gallery,nx,ny
 
-def get_gog_viper(mask=None):
+def get_gog_viper(pca_n_components=None,mask=None):
     '''return probe(n*dim,cam_a) and gallery(n*dim,cam_b) of VIPeR dataset's GOG 
        descriptors'''
     if mask=='ellipse':
@@ -168,5 +166,11 @@ def get_gog_viper(mask=None):
         cprint_out('viper gog features have existed!',end=' ')
         data=np.load(feat_file)
         probe,gallery=data['probe'],data['gallery']
+    if pca_n_components!=None:
+        W_file=os.path.join(cwd,'../../data/gog_features_viper_pca%d.npz'%pca_n_components)
+        return pca_reduct_dim(probe,gallery,pca_n_components,W_file)
     print('probe(gog)%s, gallery(gog)%s'%(str(probe.shape),str(gallery.shape)))
     return probe,gallery
+
+if __name__=='__main__':
+    salience=get_salience_viper()

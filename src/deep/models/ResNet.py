@@ -8,13 +8,14 @@ from deep.models.utils import FlattenLayer,Norm1DLayer,HorizontalPool2d,seek_ks_
 from torchvision.models.resnet import Bottleneck
 import torch.nn.functional as F
 
-class ResNet50_Classify(nn.Module):
+class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/details/100566719
     '''最简单的基于ResNet50的分类网络，适用ID损失，但是注意最后一层并未做SoftMax'''
     def __init__(self,num_ids):
         super(ResNet50_Classify,self).__init__()
         self.train_mode=True #所有模型都要有该参数
         resnet50=torchvision.models.resnet50(pretrained=True) #此处要删除原ResNet50的最后一层，因为最后一层是1000分
                                                               #类，不适用于当前任务（譬如Market1601训练集为751分类）
+                                                              ##https://github.com/akamaster/pytorch_resnet_cifar10
         self.base=nn.Sequential(
             *(list(resnet50.children())[:-1]),
             FlattenLayer(), #打印resnet50可知倒数第二层输出形状为(batch_size,2048,1,1)
@@ -72,6 +73,7 @@ class ResNet50_Aligned(nn.Module):
     def __init__(self,num_ids):
         super(ResNet50_Aligned,self).__init__()
         self.train_mode=True
+        self.aligned=False
         resnet50=torchvision.models.resnet50(pretrained=True)
         self.base=nn.Sequential(*(list(resnet50.children())[:-2])) #主干，输出(batch_size,2048,h,w)，后接两个分支
         self.bn=nn.BatchNorm2d(2048) #第一个参数是batchnorm层输入（batch_size,channel,h,w）的通道数channel(2048)
@@ -84,16 +86,18 @@ class ResNet50_Aligned(nn.Module):
         f=self.base(X)
         gf=nn.AvgPool2d((f.size()[-2:]))(f) #全局分支，全局平均池化，输出(batch_size,channel,1,1)
         gf=FlattenLayer()(gf) #删除空维，使形状为(batch_size,channel)，此处channel其实就是2048，
-                              #后接HardTri损失。这也是测试阶段的网络输出
+                              #后接HardTri损失。这也是测试阶段的网络输出。也可以用squeeze()代替
+        local_stream=nn.Sequential(self.bn,nn.ReLU(),HorizontalPool2d(pool_type='max'),self.conv1x1)
+        norm=lambda X: X / pt.pow(X,2).sum(dim=1, keepdim=True).clamp(min=1e-12).sqrt()
         if self.train_mode:
             gf1=self.classifier(gf) #全局分支的另一个分叉，后接softmax分类损失
-            lf=nn.Sequential(self.bn,nn.ReLU(),HorizontalPool2d(pool_type='max'),self.conv1x1)(f).squeeze() #局部分
-                                                                                    #支，后接TriHard损失（不
-                                                                                    #同于全局分支，局部分支
-                                                                                    #上的距离矩阵根据DMLI求解）
-            lf = lf / pt.pow(lf,2).sum(dim=1, keepdim=True).clamp(min=1e-12).sqrt() #重要！否则出现nan
+            lf=local_stream(f).squeeze() #局部分支，后接TriHard损失（不同于全局分支，局部分支上的距离矩阵根据DMLI求解）
+            lf = norm(lf) #重要！否则出现nan
             return gf1,(gf,lf) #输出形状分别为(batch_size,num_ids), (batch_size,2048), (batch_size,128,h)
         else:
+            if self.aligned:
+                lf=norm(local_stream(f).squeeze())
+                return gf,lf
             return gf
 
 class ResNet50_PCB(nn.Module): #PCB's baseline, refer to 
@@ -137,27 +141,5 @@ class ResNet50_PCB(nn.Module): #PCB's baseline, refer to
         else:
             return pt.cat(fs,dim=1)
 
-class ResNet56_jstl(nn.Module): #https://blog.csdn.net/qq_31347869/article/details/100566719
-    def __init__(self,num_ids,base_state_dict=None): #https://github.com/akamaster/pytorch_resnet_cifar10
-        super(ResNet56_jstl,self).__init__()
-        self.train_mode=True
-        # resnet56=torchvision.models.resnet.ResNet(Bottleneck,[3,5,7,9],num_classes=64)
-        resnet56=torchvision.models.resnet50(pretrained=True)
-        self.base=nn.Sequential(
-            *(list(resnet56.children())[:-1]),
-            FlattenLayer(),
-            nn.Linear(2048,64)
-        )
-        # if base_state_dict is not None:
-        #     self.base.load_state_dict(base_state_dict)
-        self.ide=nn.Linear(64,num_ids)
-
-    def forward(self,X):
-        if self.train_mode:
-            return self.ide(self.base(X))
-        else:
-            return self.base(X)
-
 if __name__=='__main__':
-    net=ResNet56_jstl(10)
-    print(net)
+    pass

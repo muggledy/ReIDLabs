@@ -4,6 +4,7 @@ References:
 [1] https://github.com/NEU-Gou/awesome-reid-dataset
 [2] https://gitlab.com/libeigen/eigen.git
 [3] https://www.itdaan.com/so?q=%E8%A1%8C%E4%BA%BA%E9%87%8D%E8%AF%86%E5%88%AB%E6%95%B0%E6%8D%AE%E9%9B%86
+[4] https://github.com/zhunzhong07/person-re-ranking/tree/master/CUHK03-NP
 '''
 
 import os.path
@@ -22,6 +23,7 @@ link_ilids='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTE
 link_3dpes='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpMi1kY2s5aFJGT2FtaERmP2U9RzhFWWc2.mp3'
 link_cuhk01='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpMndySExWNHJrNC1GRkdOP2U9QU5OclEw.mp3'
 link_cuhk03='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpM1RXSTVrQXU1WmU5enlGP2U9eGNBYWJr.mp3' #mat文件，1.6G
+link_cuhk03np='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpM1lBQVJmUnF5UURHMVIwP2U9T2FQYWpk.mp3'
 
 def download_dateset(dataset,save_dir=None): #注意压缩数据集下载到本地将自动解压，但是原压缩文件不会被代码删除
     dataset=dataset.lower()

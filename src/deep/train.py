@@ -7,6 +7,7 @@ import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
 from zoo.tools import measure_time
+# from functools import partial
 
 def setup_seed(seed):
     print('Use random seed(%d)'%seed)
@@ -20,12 +21,29 @@ def setup_seed(seed):
 def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,**kwargs):
     '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]即序列形式。总损失loss
        =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...'''
-    flag='cuda' if pt.cuda.is_available() else 'cpu' #优先使用GPU
+    if checkpoint is not None and checkpoint.loaded:
+        net.load_state_dict(checkpoint.states_info_etc['state'])
+        start_epoch=checkpoint.states_info_etc['epoch']+1
+        optimizer.load_state_dict(checkpoint.states_info_etc['optimizer']) #必须配合保存重载optimizer，scheduler才起作用
+        for state in optimizer.state.values(): #https://blog.csdn.net/weixin_41848012/article/details/105675735
+            for k, v in state.items():
+                if pt.is_tensor(v):
+                    state[k] = v.cuda()
+        if checkpoint.states_info_etc.get('scheduler'):
+            scheduler.load_state_dict(checkpoint.states_info_etc['scheduler'])
+    else:
+        start_epoch=0
+    # if scheduler is not None and isinstance(scheduler,partial):
+    #     scheduler=scheduler(last_epoch=start_epoch-1)
+    # if scheduler is not None:
+    #     scheduler.step(start_epoch-1)
+
+    flag='cuda' if pt.cuda.is_available() else 'cpu' #如果存在GPU，优先使用GPU
     origin_device=device
     device=pt.device(flag) if device is None else device
     net=net.to(device)
     if flag=='cuda' and origin_device is None: #如果device已经人为给出，即拥有最高优先级。如果没有给出
-                                        #为None，才会尝试放到多GPU设备上运行，假设存在GPU设备的话
+                                               #为None，才会尝试放到多GPU设备上运行，假设存在GPU设备的话
         cudnn.benchmark=True
         net=nn.DataParallel(net) #允许多卡训练，https://blog.csdn.net/zhjm07054115/article/details/104799661/
         print('Set cudnn.benchmark=True')
@@ -37,13 +55,11 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     else:
         print('Now training on %s...'%device)
     
-    if checkpoint is not None and checkpoint.loaded:
-        net.load_state_dict(checkpoint.states_info_etc['state']) #注意必须在执行net=DataParallel(net)之后加载参数
-        start_epoch=checkpoint.states_info_etc['epoch']+1
-    else:
-        start_epoch=0
     net.train()
-    net.module.train_mode=True #注意，只要有GPU，我们就做了DataParallel！
+    if isinstance(net,nn.DataParallel):
+        net.module.train_mode=True
+    else:
+        net.train_mode=True
     
     all_batches_num=len(train_iter)
     losses_num=len(losses)
@@ -56,6 +72,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     if coeffis is None: #coeffis长度默认和losses_name保持一致，默认值全为1
         coeffis=[1]*len(losses_name)
     coeffis_lossesname_flag=True
+    
     for epoch in range(start_epoch,epochs):
         for batch_ind,(batchImgs,pids,cids) in enumerate(train_iter):
             batchImgs,pids=batchImgs.to(device),pids.to(device) #目前用不到cids摄像头信息
@@ -68,7 +85,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
             # L=0 #
             Llist=[]
             for losses_ind,loss in enumerate(losses):
-                subL=loss(out[losses_ind],pids)
+                subL=loss(out[losses_ind],pids.to(pt.int64))
                 if isinstance(subL,(list,tuple)): ## 要求损失函数的输出要么是单个0维tensor，要么是多个0维tensor的列表！
                     Llist.extend(subL)
                 else:
@@ -86,16 +103,18 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
             optimizer.zero_grad()
             L.backward()
             optimizer.step()
-            if batch_ind==0 or (batch_ind+1)%20==0:
+            if batch_ind==0 or (batch_ind+1)%20==0 or batch_ind+1==all_batches_num:
                 opt_parms=optimizer.param_groups if scheduler is None else scheduler.optimizer.param_groups
-                print('epoch=%d, batch=[%d/%d], %s, %s'%(epoch+1,batch_ind+1,all_batches_num, \
+                print('epoch=[%d/%d], batch=[%d/%d], %s, %s'%(epoch+1,epochs,batch_ind+1,all_batches_num, \
                     'loss=%f'%L if nLlist==1 else ('loss(all)=%f, '%L)+ \
                     (', '.join(['%s=%f'%(losses_name[i],Llist[i]) for i in range(nLlist)])), \
-                    ', '.join(['lr(%s)=%s'%(e.get('name',i+1),e['lr']) for i,e in enumerate(opt_parms)]) \
-                    if len(list(opt_parms))>1 else 'lr=%s'%opt_parms[0]['lr']))
+                    ', '.join(['lr(%s)=%s'%(e.get('name',i+1),'{:g}'.format(e['lr'])) for i,e in enumerate(opt_parms)]) \
+                    if len(list(opt_parms))>1 else 'lr=%s'%('{:g}'.format(opt_parms[0]['lr']))))
         if scheduler is not None:
             scheduler.step()
         if checkpoint is not None:
-            checkpoint.save({'state':net.state_dict(),'epoch':epoch})
+            checkpoint.save({'state':net.module.state_dict() if \
+                    isinstance(net,nn.DataParallel) else net.state_dict(),'epoch':epoch,
+                    'optimizer':optimizer.state_dict(),
+                    'scheduler':None if scheduler is None else scheduler.state_dict()})
     print('Train OVER!')
-    

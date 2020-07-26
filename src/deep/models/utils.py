@@ -4,8 +4,10 @@ import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__),'../../'))
 from zoo.tools import mkdir_if_missing
+from zoo.tools import euc_dist_pro as euc_dist_pro_numpy
 from zoo.cprint import cprint_err
 import numpy as np
+from tqdm import tqdm
 
 class FlattenLayer(nn.Module):
     def __init__(self):
@@ -125,7 +127,10 @@ class HorizontalPool2d(nn.Module): #水平池化
 def shortest_dist(dist):
     '''利用动态规划算法计算最短路径，输入dist形状为(m,n)或(m,n,batch_size)，前者将返回一个标量，
        后者返回一个长度为batch_size的向量'''
-    m,n=dist.size()[:2]
+    if isinstance(dist,pt.Tensor):
+        m,n=dist.size()[:2]
+    elif isinstance(dist,np.ndarray):
+        m,n=dist.shape[:2]
     t=[[0 for _ in range(n)] for _ in range(m)]
     for i in range(m):
         for j in range(n):
@@ -136,18 +141,44 @@ def shortest_dist(dist):
             elif i>0 and j==0:
                 t[i][j]=t[i-1][j]+dist[i][j]
             else:
-                t[i][j]=pt.min(t[i-1][j],t[i][j-1])+dist[i][j]
+                if isinstance(dist,pt.Tensor):
+                    t[i][j]=pt.min(t[i-1][j],t[i][j-1])+dist[i][j]
+                elif isinstance(dist,np.ndarray):
+                    t[i][j]=np.minimum(t[i-1][j],t[i][j-1])+dist[i][j]
     return t[-1][-1]
 
 def dist_DMLI(X,Y):
     '''具体参考AlignedReID论文。计算X(batch_size,dim,m)和Y(batch_size,dim,n)之间的DMLI距离
-       ，X[i,:,:]代表了第i个行人的m个长度为dim的水平条特征，返回D，形状为(batch_size1,)
-       ，D[i]即X中第i个行人图像和Y中第i个行人图像的局部特征做对齐后所求距离值，根据最短路径（基于动
+       ，其中X[i,:,:]代表了第i个行人的m个长度为dim的水平条特征，函数返回D，形状为(batch_size,)
+       ，D[i]即X中第i个行人图像和Y中第i个行人图像的局部特征做对齐后所求距离值，其根据最短路径（基于动
        态规划）得到'''
-    stripe_dist_mat=euc_dist_pro(X,Y).sqrt() #(batch_size,m,n)
-    stripe_dist_mat=(pt.exp(stripe_dist_mat)-1.0)/(pt.exp(stripe_dist_mat)+1.0) #论文中的归一化处理
-    D=shortest_dist(stripe_dist_mat.permute(1,2,0)).view(-1)
+    if isinstance(X,pt.Tensor):
+        stripe_dist_mat=euc_dist_pro(X,Y).sqrt() #(batch_size,m,n)
+        stripe_dist_mat=(pt.exp(stripe_dist_mat)-1.0)/(pt.exp(stripe_dist_mat)+1.0) #论文中的归一化处理
+        D=shortest_dist(stripe_dist_mat.permute(1,2,0)).view(-1) #permute:(batch_size,m,n)->(m,n,batch_size)
+    elif isinstance(X,np.ndarray):
+        stripe_dist_mat=np.sqrt(euc_dist_pro_numpy(X,Y))
+        stripe_dist_mat=(np.exp(stripe_dist_mat)-1.0)/(np.exp(stripe_dist_mat)+1.0)
+        D=shortest_dist(np.rollaxis(stripe_dist_mat,0,3)).reshape(-1)
     return D
+
+def calc_dist_DMLI(X,Y,desc=('query','gallery')):
+    '''return a dist matrix(m,n) between X(m,·,·) and Y(n,·,·), about (,·,·), see dist_DMLI'''
+    print('Calc DMLI distance between %s%s and %s%s:'%(desc[0],str(tuple(X.shape)) if \
+        isinstance(X,pt.Tensor) else str(X.shape), \
+        desc[1],str(tuple(Y.shape)) if isinstance(Y,pt.Tensor) else str(Y.shape)))
+    if isinstance(X,pt.Tensor):
+        dist=pt.zeros(X.shape[0],Y.shape[0])
+    elif isinstance(X,np.ndarray):
+        dist=np.zeros((X.shape[0],Y.shape[0]))
+    for i in tqdm(range(X.shape[0]),ncols=80,ascii=True):
+        qf=X[i]
+        if isinstance(X,pt.Tensor):
+            qf=pt.stack([qf for i in range(Y.shape[0])])
+        elif isinstance(X,np.ndarray):
+            qf=np.broadcast_to(qf,(Y.shape[0],)+X.shape[1:])
+        dist[i]=dist_DMLI(qf,Y)
+    return dist
 
 def seek_ks_3m(h,h_,printf=False):
     '''根据3m原则寻找最佳核尺寸和步长，h为输入长度，h_为输出长度，函数除了返回
@@ -207,5 +238,9 @@ class LambdaLayer(nn.Module): #有了这个类，譬如要添加flatten层，就
         return self.lambd(x)
 
 if __name__ == "__main__":
-    k,s=seek_ks_3m(24,6)[:2]
-    print(k,s)
+    # k,s=seek_ks_3m(24,6)[:2]
+    # print(k,s)
+    X=np.arange(3*5*3).reshape(3,5,3)
+    Y=np.arange(4*5*2).reshape(4,5,2)
+    print(calc_dist_query_gallery_DMLI(pt.from_numpy(X).to(pt.float32),pt.from_numpy(Y).to(pt.float32)))
+    print(calc_dist_query_gallery_DMLI(X,Y))

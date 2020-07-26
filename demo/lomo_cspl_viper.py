@@ -10,7 +10,7 @@ from sklearn.decomposition import PCA
 
 cwd=getcwd(__file__)
 numClass=632
-numFlods=10
+numFlods=1
 
 t1=time.time()
 # --Stage1: get lomo features--
@@ -25,8 +25,6 @@ probFea=data[:,:632].T
 galFea=data[:,632:].T
 '''
 
-probFea=probFea.T
-galFea=galFea.T
 # --Stage2: train and match--
 dim=100 #for viper, set to 600(99%) and set to 100(56%), no difference!
         #PCA refer: https://www.cnblogs.com/pinard/p/6243025.html
@@ -34,19 +32,20 @@ cs=[]
 for i in range(numFlods):
     p=np.random.permutation(numClass)
     half=int(numClass/2)
-    probFea1=probFea[:,p[:half]]
-    galFea1=galFea[:,p[:half]]
+    probFea1=probFea[p[:half],:]
+    galFea1=galFea[p[:half],:]
 
     pca=PCA(n_components=dim)
-    t=pca.fit_transform(np.hstack((probFea1,galFea1)).T)
+    t=pca.fit_transform(np.vstack((probFea1,galFea1)))
     probFea1,galFea1=np.split(t,2)
     energy=sum(pca.explained_variance_ratio_)
     print('reduct to dim %d(energy:%.2f%%)'%(dim,energy*100))
 
-    P1,P2,A=cspl(probFea1.T,galFea1.T,iter=200)
-    probFea2=probFea[:,p[half:]]
-    galFea2=galFea[:,p[half:]]
-    t=pca.transform(np.hstack((probFea2,galFea2)).T)
+    P1,P2,A=cspl(probFea1.T,galFea1.T,iter=50)
+    probFea2=probFea[p[half:],:]
+    galFea2=galFea[p[half:],:]
+
+    t=pca.transform(np.vstack((probFea2,galFea2)))
     probFea2,galFea2=np.split(t,2)
 
     dist=euc_dist(P1.dot(probFea2.T),A.dot(P2.dot(galFea2.T)))

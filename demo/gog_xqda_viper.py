@@ -11,7 +11,8 @@ from lomo.xqda import xqda
 from gog.utils import normalize
 
 t1=time.time()
-probe,gallery=get_gog_viper() #mask='ellipse' no help
+probe,gallery=get_gog_viper(pca_n_components=None) #mask='ellipse' no help
+#为什么做了PCA降维后，结果会变得非常非常低（rank-1:3.73%）？
 probFea=normalize(probe.T) #(normalize)seems no great effect
 galFea=normalize(gallery.T)
 

@@ -2,6 +2,10 @@ from PIL import Image
 import os.path
 from torch.utils.data import Dataset,DataLoader
 import torchvision.transforms as T
+import os.path
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+from deep.transform import RandomErasing
 
 def read_image(img_path):
     if not os.path.exists(img_path):
@@ -24,7 +28,7 @@ class reidDataset(Dataset):
             img=self.transform(img)
         return img,pid,cid
 
-default_train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(), \
+default_train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(),RandomErasing(), \
     T.ToTensor(),T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
 default_test_transforms=[T.Resize((256,128)),T.ToTensor(), \
     T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
