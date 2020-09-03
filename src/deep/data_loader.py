@@ -28,6 +28,24 @@ class reidDataset(Dataset):
             img=self.transform(img)
         return img,pid,cid
 
+class testDataset(Dataset): #用于构造测试图像数据集，测试图像没有标签也不需要知道任何监督信息
+    def __init__(self,dataset,transform=None): #dataset默认应该是一个图像路径列表，但也可以是一个文件夹路径
+        if isinstance(dataset,str) and os.path.isdir(dataset):
+            all_imgs_file=[i for i in sorted(os.listdir(dataset)) if i.endswith(('.jpg','.png','.bmp'))]
+            self.dataset=[os.path.join(dataset,i) for i in all_imgs_file]
+        else:
+            self.dataset=dataset
+        self.transform=transform
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self,index):
+        img=read_image(self.dataset[index])
+        if self.transform is not None:
+            img=self.transform(img)
+        return (img,) #原来差个括号啊，该死
+
 default_train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(),RandomErasing(), \
     T.ToTensor(),T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
 default_test_transforms=[T.Resize((256,128)),T.ToTensor(), \

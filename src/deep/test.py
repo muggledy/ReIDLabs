@@ -5,6 +5,8 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
 from zoo.tools import measure_time,print_cmc,cosine_dist,euc_dist
 from deep.re_ranking import re_ranking
+from deep.data_loader import testDataset
+from torch.utils.data import DataLoader
 import numpy as np
 import scipy.io as scio
 from itertools import count
@@ -17,7 +19,15 @@ def euc_dist_T(X,Y,desc=('query','gallery')):
     print('Calc euclidean distance between %s%s and %s%s'%(desc[0],str(X.shape),desc[1],str(Y.shape)))
     return euc_dist(X.T,Y.T)
 
-def extract_feats(net,data_iter,device=None):
+def extract_feats(net,data_iter,device=None,**kwargs):
+    '''data_iter除了可以是一个DataLoader实例，还可以是一个文件夹路径，不过此时必须传递transform关键字参数'''
+    if isinstance(data_iter,str) and os.path.isdir(data_iter):
+        if kwargs.get('transform') is None:
+            raise ValueError('Must give transform for func extract_feats!')
+        data_iter=DataLoader(testDataset(data_iter,kwargs['transform']),batch_size= \
+            kwargs.get('batch_size',32),shuffle=False,num_workers=kwargs.get('num_workers',4), \
+            drop_last=False)
+
     device=pt.device('cuda' if pt.cuda.is_available() else 'cpu') if device is None else device
     net=net.to(device)
     net.eval()

@@ -4,7 +4,7 @@ import os
 import re
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
-from zoo.tools import norm_labels
+from zoo.tools import norm_labels,flatten
 from functools import partial
 from collections import defaultdict
 
@@ -21,7 +21,7 @@ class Ana78: #2020.7.8
         if not ret: #模式匹配名称结果为空，表示非图片文件
             return None
         pid,cid=list(map(int,ret[0]))
-        if pid>=0: #Market1501的gallery中有部分行人ID为-1的图像，忽略，所以此处设置只有PID>=0时才计入
+        if pid>=0: #需要注意Market1501的gallery中有部分行人ID为-1的图像，忽略，所以此处设置只有PID>=0时才计入
             return pid,cid
         else:
             return None
@@ -172,7 +172,7 @@ class get_query_gallery_dataset(DataSetBase):
         self.queryDir=True
         self.galleryDir=True
 
-class Ana716(Ana78): #阵对图像名中只含行人ID的解析器
+class Ana716(Ana78): #针对图像名中只含行人ID的解析器
     def get_info_from_img_name(self,img_name):
         ret=self.pattern.findall(img_name)
         if not ret:
@@ -230,6 +230,8 @@ def process_cuhk01(dataset_dir,split_train_test=False): #为避免错误，使�
         trainSet,querySet,gallerySet=[],[],[]
         for i in p_train:
             trainSet.extend(dataset[i*4:(i+1)*4])
+        train_imgs,train_pids,train_cids=list(zip(*trainSet))
+        trainSet=list(zip(train_imgs,norm_labels(train_pids),norm_labels(train_cids)))
         for i in p_test:
             querySet.extend(dataset[i*4:i*4+2])
             gallerySet.extend(dataset[i*4+2:i*4+4])
@@ -269,6 +271,8 @@ def process_cuhk03(dataset_dir,split_train_test=False,official=False): #一般�
             for k in keys:
                 for _ in d[k]:
                     trainSet.append(dataset[_])
+        train_imgs,train_pids,train_cids=list(zip(*trainSet))
+        trainSet=list(zip(train_imgs,norm_labels(train_pids),norm_labels(train_cids)))
         for i in p_test: #由于每个行人只在两个摄像头下出现，因此测试数据中query数据集是所有测试行人在某一
                          #摄像头下的数据，gallery则是所有测试行人在另一摄像头下的数据
             keys=[k for k in d.keys() if i==int(k.split('-')[0])] #keys长度为2
@@ -300,7 +304,7 @@ def process_market1501(dataset_dir,split_train_test=False):
         return dataset
 
 def process_prid2011(dataset_dir,split_train_test=False,like_viper=True): #使用single-shot数据集，且对于cam_a，只使用前200张
-                                                #图像（总共385张），进一步，如果like_viper为True，则cam_b也只使用前200张图像，
+                                                #图像（总共385张），另外，如果like_viper置为True，则cam_b也只使用前200张图像，
                                                 #like_viper只当split_train_test为False时起效，这是因为此时是用于混合训练集数据，
                                                 #太多不匹配会导致模型崩塌
     analyse=Ana716(r'_(\d{,4})')
@@ -336,6 +340,125 @@ def process_prid2011(dataset_dir,split_train_test=False,like_viper=True): #使�
         pids=pids_a+pids_b
         cids=cids_a+cids_b
         dataset=list(zip(imgs,norm_labels(pids),norm_labels(cids)))
+        return dataset
+
+def process_3dpes(dataset_dir,split_train_test=False):
+    analyse=Ana78(r'(\d+)_(\d+)_.*')
+    dataset=process_dir(dataset_dir,True,analyse)
+    pdict = defaultdict(lambda: defaultdict(list))
+    for name,pid,cid in dataset:
+        pdict[pid][cid].append((name,pid,cid))
+    # Randomly choose half of the cameras as cam_0, others as cam_1, same as 
+    # https://github.com/yokattame/SpindleNet/blob/master/data/format_3dpes.py
+    identities = []
+    for pid in pdict:
+        cids = list(pdict[pid].keys())
+        num_views = len(cids)
+        np.random.shuffle(cids)
+        p_images = [[], []]
+        for cid in cids[:(num_views // 2)]:
+            p_images[0].extend(pdict[pid][cid])
+        for cid in cids[(num_views // 2):]:
+            p_images[1].extend(pdict[pid][cid])
+        if len(p_images[0])>0:
+            imgs_a,pids_a,cids_a=list(zip(*(p_images[0])))
+            p_images[0]=list(zip(imgs_a,pids_a,[0]*len(imgs_a)))
+        if len(p_images[1])>0:
+            imgs_b,pids_b,cids_b=list(zip(*(p_images[1])))
+            p_images[1]=list(zip(imgs_b,pids_b,[1]*len(imgs_b)))
+        identities.append(p_images)
+    if split_train_test:
+        n=len(identities)
+        inds = np.random.permutation(n)
+        train_inds = inds[:n//2]
+        test_inds = inds[n//2:]
+        trainSet,querySet,gallerySet=[],[],[]
+        for i in train_inds:
+            trainSet.extend(flatten(identities[i],1))
+        train_imgs,train_pids,train_cids=list(zip(*trainSet))
+        trainSet=list(zip(train_imgs,norm_labels(train_pids),norm_labels(train_cids)))
+        for i in test_inds:
+            querySet.extend(identities[i][0])
+            gallerySet.extend(identities[i][1])
+        return trainSet,querySet,gallerySet
+    else:
+        return flatten(identities,2)
+
+def process_ilids(dataset_dir,split_train_test=False):
+    analyse=Ana716(r'^(\d{,4})')
+    dataset=process_dir(dataset_dir,True,analyse)
+    pdict = defaultdict(list)
+    # Randomly choose half of the images as cam_0, others as cam_1, same as 
+    # https://github.com/yokattame/SpindleNet/blob/master/data/format_ilids.py
+    for name,pid,cid in dataset:
+        pdict[pid].append((name,pid,cid))
+    identities = []
+    for pid in pdict:
+        imgs=pdict[pid]
+        num=len(imgs)
+        np.random.shuffle(imgs)
+        p_images = [[], []]
+        for img in imgs[:num//2]:
+            p_images[0].append(img)
+        for img in imgs[num//2:]:
+            p_images[1].append(img)
+        if len(p_images[0])>0:
+            imgs_a,pids_a,cids_a=list(zip(*(p_images[0])))
+            p_images[0]=list(zip(imgs_a,pids_a,[0]*len(imgs_a)))
+        if len(p_images[1])>0:
+            imgs_b,pids_b,cids_b=list(zip(*(p_images[1])))
+            p_images[1]=list(zip(imgs_b,pids_b,[1]*len(imgs_b)))
+        identities.append(p_images)
+    if split_train_test:
+        n=len(identities)
+        inds = np.random.permutation(n)
+        train_inds = inds[:n//2]
+        test_inds = inds[n//2:]
+        trainSet,querySet,gallerySet=[],[],[]
+        for i in train_inds:
+            trainSet.extend(flatten(identities[i],1))
+        train_imgs,train_pids,train_cids=list(zip(*trainSet))
+        trainSet=list(zip(train_imgs,norm_labels(train_pids),norm_labels(train_cids)))
+        for i in test_inds:
+            querySet.extend(identities[i][0])
+            gallerySet.extend(identities[i][1])
+        return trainSet,querySet,gallerySet
+    else:
+        return flatten(identities,2)
+
+def process_shinpuhkan(dataset_dir,split_train_test=False): #cam_0 to cam_15
+    analyse=Ana78(r'(\d+)_(\d+)_.*')
+    dataset=process_dir(dataset_dir,True,analyse)
+    if split_train_test:
+        pdict = defaultdict(lambda: defaultdict(list))
+        for name,pid,cid in dataset:
+            pdict[pid][cid].append((name,pid,cid))
+        #Randomly choose half of the identities as training set, the other half 
+        #as testing set, where randomly choose half of the cameras as probe, others as gallery
+        pids=list(pdict.keys())
+        n=len(pids)
+        np.random.shuffle(pids)
+        train_pids = pids[:n//2]
+        test_pids = pids[n//2:]
+        trainSet,querySet,gallerySet=[],[],[]
+        for pid in train_pids:
+            trainSet.extend(flatten([pdict[pid][cid] for cid in pdict[pid]],1))
+        train_imgs,train_pids,train_cids=list(zip(*trainSet))
+        trainSet=list(zip(train_imgs,norm_labels(train_pids),norm_labels(train_cids)))
+        cids = np.random.permutation(16)
+        probe_cids = cids[:8]
+        gallery_cids = cids[8:]
+        for pid in test_pids:
+            for cid in probe_cids:
+                t=pdict[pid].get(cid)
+                if t:
+                    querySet.extend(t)
+            for cid in gallery_cids:
+                t=pdict[pid].get(cid)
+                if t:
+                    gallerySet.extend(t)
+        return trainSet,querySet,gallerySet
+    else:
         return dataset
 
 class MixDataSets: #混合多个数据集，当前是为无监督模型迁移编写的，用几个无关数据集进行训练，在目标数据集上测试，
@@ -390,13 +513,23 @@ if __name__=='__main__':
     dataset_dir=os.path.join(os.path.dirname(__file__),'../../images/')
     mixdatasets=MixDataSets(('cuhk03',os.path.join(dataset_dir,'cuhk03_images/detected')),('cuhk01',os.path.join(dataset_dir,'CUHK01')), \
         ('market1501',os.path.join(dataset_dir,'Market-1501-v15.09.15')),(partial(process_prid2011,like_viper=True), \
-        os.path.join(dataset_dir,'./prid2011/single_shot')))
+        os.path.join(dataset_dir,'./prid2011/single_shot')),('3dpes',os.path.join(dataset_dir,'./3DPeS/RGB/')),\
+        ('ilids',os.path.join(dataset_dir,'./i-LIDS/')),('shinpuhkan',os.path.join(dataset_dir,'Shinpuhkan/images/')))
     mixdatasets.print_info()
-    # process_viper(os.path.join(dataset_dir,'./VIPeR.v1.0'),split_train_test=True)
-    # dataset=process_prid2011(os.path.join(dataset_dir,'./prid2011/single_shot'),like_viper=False)
-    # dataset=process_cuhk01(os.path.join(dataset_dir,'CUHK01'),True)
-    # dataset=process_cuhk03(os.path.join(dataset_dir,'cuhk03-np/detected'),split_train_test=True,official=True)
-    # print(dataset[1][:10])
+    # t=process_viper(os.path.join(dataset_dir,'./VIPeR.v1.0'),split_train_test=True)
+    # print(min(list(zip(*(t[0])))[1]))
+    # t=process_prid2011(os.path.join(dataset_dir,'./prid2011/single_shot'),True,like_viper=False)
+    # print(t[0][:5])
+    # t=process_cuhk01(os.path.join(dataset_dir,'CUHK01'),True)
+    # print(min(list(zip(*(t[0])))[1]))
+    # t=process_cuhk03(os.path.join(dataset_dir,'cuhk03_images/detected'),split_train_test=True,official=False)
+    # print(max(list(zip(*(t[0])))[1]))
     # trainSet,querySet,gallerySet=process_viper(os.path.join(dataset_dir,'VIPeR.v1.0'),split_train_test=True)
     # t=get_query_gallery_dataset(querySet,gallerySet,None)
     # t.print_info()
+    # t=process_3dpes(os.path.join(dataset_dir,'./3DPeS/RGB/'),True)
+    # print(t[2][:10])
+    # t=process_ilids(os.path.join(dataset_dir,'./i-LIDS/'),False)
+    # print(t[:10])
+    # t=process_shinpuhkan(os.path.join(dataset_dir,'Shinpuhkan/images/'),True)
+    # print(t[2][:10])

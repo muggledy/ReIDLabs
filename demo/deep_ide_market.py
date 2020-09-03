@@ -48,7 +48,8 @@ if __name__=='__main__': #话说为什么这部分代码一定要放在__main__�
     
     train(net,train_iter,(loss,),optimizer,num_epochs,scheduler,checkpoint=checkpoint) #即使你只想利用checkpoint做test，也必须先执行一下
                                                                                        #train，由于epoch已达最大，所以实际并不会进行训练
-                                                                                       #这仅仅是为了完成加载模型参数这一步骤
+                                                                                       #这仅仅是为了完成加载模型参数这一步骤。当然你也可以
+                                                                                       #手动执行加载net.load_state_dict(...)
     gal_savedir=os.path.join(os.path.dirname(__file__),'../data/market1501_resnetIDE_gallery.mat')
     test(net,query_iter,gallery_iter,eval_cmc_map,save_galFea=gal_savedir,re_rank=False)
 

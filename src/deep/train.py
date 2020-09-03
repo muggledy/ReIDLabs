@@ -37,6 +37,11 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     #     scheduler=scheduler(last_epoch=start_epoch-1)
     # if scheduler is not None:
     #     scheduler.step(start_epoch-1)
+    checkpoint.states_info_etc=None #在训练MGN模型时，采用PK采样（用于三元组损失），P=8，K=4，事实上此时显存占用已达60%-70%（8G），
+    #当我暂停训练，并从checkpoint继续时，得到一条错误：CUDA error: CUBLAS_STATUS_ALLOC_FAILED when calling `cublasCreate(handle)`
+    #隐约感到这是显存不够导致的，我降低了批次大小，令P=2，不再报错，于是定位到此处，在从checkpoint加载模型参数后，将checkpoint置为None
+    #（以释放空间）
+    checkpoint.loaded=False #与此同时，将loaded标志置为False，下次必须重新加载才行
 
     flag='cuda' if pt.cuda.is_available() else 'cpu' #如果存在GPU，优先使用GPU
     origin_device=device

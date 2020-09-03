@@ -14,7 +14,7 @@ from zoo.tools import create_ellipse_mask
 
 def load_data(file_path,mask=None):
     '''load images in file_path into 4-D ndarray(h,w,3,n)'''
-    txls=[i for i in os.listdir(file_path) if i.endswith(('.jpg','.png','.bmp'))]
+    txls=[i for i in sorted(os.listdir(file_path)) if i.endswith(('.jpg','.png','.bmp'))]
     n=len(txls)
     im0=cv2.imread(os.path.join(file_path,txls[0]))
     if mask=='ellipse':

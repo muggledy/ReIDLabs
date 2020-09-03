@@ -308,12 +308,16 @@ def mkdir_if_missing(dir_path):
         print('Create DIR %s'%os.path.normpath(dir_path))
         os.makedirs(dir_path)
 
-def flatten(a):
-    '''使用递归展开一个嵌套的多层for循环'''
+def flatten(a,depth=-1):
+    '''使用递归展开一个嵌套的多层列表，depth表示递归的最大深度，如果等于0，
+       则不递归（原样输出），如果置为-1，表示无递归深度限制'''
     ret=[]
     for i in a:
-        if isinstance(i,Iterable):
-            ret.extend(flatten(i))
+        if isinstance(i,(list,tuple)) and (depth>0 or depth==-1): #isinstance(i,Iterable)
+            if depth==-1:
+                ret.extend(flatten(i,-1))
+            elif depth>0:
+                ret.extend(flatten(i,depth-1))
         else:
             ret.append(i)
     return ret
@@ -547,6 +551,8 @@ class Crawler:
     def __call__(self,*args,**kwargs): #这些参数将如数传递给get内部的request函数
         return self.get(*args,**kwargs)
 
+#谷歌云盘：pip install google-cloud-storage
+
 def split_dataset_trials(pids,cids,dataset,trials=10): #通过/images/download_dataset.py下载这些数据集，
                                                        #注意是根据其在Windows下的读取顺序设计的
     pids=norm_labels(pids)
@@ -606,54 +612,10 @@ def split_dataset_trials(pids,cids,dataset,trials=10): #通过/images/download_d
         pass
         
 if __name__=='__main__':
-    '''
-    url='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBZ204d3BjSVhDanNnNHRuV2VyWDNxWk9BM0JBcUE=.jpg'
+    #url='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBZ204d3BjSVhDanNnNHRuV2VyWDNxWk9BM0JBcUE=.jpg'
     url='http://ting6.yymp3.net:82/new10/gaojin/12.mp3'
     crawler=Crawler(url)
     crawler(show_bar=True)
     # crawler.show_img()
     crawler.play_audio()
-    '''
-    # t=split_dataset_trials(list(range(749))+list(range(200)),[0]*749+[1]*200,'prid_single')
-    # print()
-    '''
-    import scipy.io as scio
-    data=scio.loadmat('C:/Users/Administrator/Desktop/dists.mat')
-    dist=data['dist']
-    paras=data['paras'][0][0]
-    cmc,mAP=calc_cmc_map(dist,paras[1],paras[0],paras[3],paras[2])
-    print_cmc(cmc,color=True)
-    print(mAP)
-    '''
-    import scipy.io as scio
-    feadir=r'C:\Users\Administrator\Desktop\CAMEL-master'
-    # viper_pids=list(range(632))*2
-    # viper_cids=[1]*632+[2]*632
-    # ret=split_dataset_trials(viper_pids,viper_cids,'viper')
-    # viperfeafile=os.path.join(feadir,'viper_jstl64.mat')
-    # viperfea=scio.loadmat(viperfeafile)['feature']
-    # print(viperfea.shape)
-    ### viper通过camel提供的matlab提取jstl特征后，直接用viperjstl分支下的split.m分割，然后执行demo_ours.m即可
-    cuhk01_pids=np.broadcast_to(np.arange(485+486)[:,None],(485+486,4)).flatten().tolist()
-    cuhk01_cids=[1,1,2,2]*(485+486)
-    ret=split_dataset_trials(cuhk01_pids,cuhk01_cids,'cuhk01')
-    cuhk01feafile=os.path.join(feadir,'cuhk01_my_jstl.mat')
-    cuhk01feasavefile=os.path.join(feadir,'CUHK01_jstl64_trials.mat')
-    cuhk01fea=scio.loadmat(cuhk01feafile)['feature']
-    save_data={}
-    for trial_num,trial_data in enumerate(ret,1):
-        save_data['trial%d'%trial_num]={'featAtrain':cuhk01fea[:,trial_data['indsAtrain']],\
-            'featBtrain':cuhk01fea[:,trial_data['indsBtrain']],\
-                'featAtest':cuhk01fea[:,trial_data['indsAtest']],\
-                    'featBtest':cuhk01fea[:,trial_data['indsBtest']],
-                    'labelsAtrain':trial_data['labelsAtrain']+1,
-                    'labelsBtrain':trial_data['labelsBtrain']+1,
-                    'labelsAtest':trial_data['labelsAtest']+1,
-                    'labelsBtest':trial_data['labelsBtest']+1,
-                    'camlabelsAtrain':trial_data['camlabelsAtrain']+1,
-                    'camlabelsBtrain':trial_data['camlabelsBtrain']+1,
-                    'camlabelsAtest':trial_data['camlabelsAtest']+1,
-                    'camlabelsBtest':trial_data['camlabelsBtest']+1}
-    scio.savemat(cuhk01feasavefile,save_data)
-    ### 提取jstl特征后，由cuhk01jstl分支下的split对cuhk01_jstl64_save.mat做组织，得到CUHK01_jstl64_split.mat，再执行demo_ours.m即可
     

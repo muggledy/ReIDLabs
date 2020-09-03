@@ -5,6 +5,7 @@ References:
 [2] https://gitlab.com/libeigen/eigen.git
 [3] https://www.itdaan.com/so?q=%E8%A1%8C%E4%BA%BA%E9%87%8D%E8%AF%86%E5%88%AB%E6%95%B0%E6%8D%AE%E9%9B%86
 [4] https://github.com/zhunzhong07/person-re-ranking/tree/master/CUHK03-NP
+[5] https://github.com/dzzp/argos-back/issues/5
 '''
 
 import os.path
@@ -24,6 +25,7 @@ link_3dpes='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTE
 link_cuhk01='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpMndySExWNHJrNC1GRkdOP2U9QU5OclEw.mp3'
 link_cuhk03='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpM1RXSTVrQXU1WmU5enlGP2U9eGNBYWJr.mp3' #mat文件，1.6G
 link_cuhk03np='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpM1lBQVJmUnF5UURHMVIwP2U9T2FQYWpk.mp3'
+link_shinpuhkan='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBcjdORVNsRGhsRXRhLXF4U2ZGZXJ0LVg3NlE/ZT1SRUJ2aGQ=.mp3'
 
 def download_dateset(dataset,save_dir=None): #注意压缩数据集下载到本地将自动解压，但是原压缩文件不会被代码删除
     dataset=dataset.lower()
