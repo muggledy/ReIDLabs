@@ -18,7 +18,7 @@ import torch.nn as nn
 
 if __name__=='__main__':
     setup_seed(0)
-    dataset_dir=os.path.join(os.path.dirname(__file__),'../images/Market-1501-v15.09.15/')
+    dataset_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../images/Market-1501-v15.09.15/')
     checkpoint=CheckPoint()
     checkpoint.load('ResNet50_PCB.tar')
 

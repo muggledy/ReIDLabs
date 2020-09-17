@@ -5,7 +5,7 @@
 import numpy as np
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from lomo.tools import normc #由于有许多同名的tools文件，如果from tools import normc可能会发生导入错误
 import cv2
 from lomo.siltp import calc_siltp2

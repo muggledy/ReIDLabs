@@ -17,7 +17,7 @@ galFea=galFea.T
 '''official lomo
 import scipy.io as sio
 import os.path
-cwd=os.path.dirname(__file__)
+cwd=os.path.dirname(os.path.realpath(__file__))
 data=sio.loadmat(os.path.normpath(os.path.join(cwd,'../data/viper_lomo.mat')))['descriptors']
 probFea=data[:,:632]
 galFea=data[:,632:]

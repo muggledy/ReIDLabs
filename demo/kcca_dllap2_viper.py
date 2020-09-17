@@ -28,7 +28,7 @@ from zoo.tools import norm_labels_simultaneously
 import scipy.io as sio
 
 def get_data(trial=0,dataset='viper'):
-    file_path=os.path.join(os.path.dirname(__file__),'../data/%s_split.mat'%dataset)
+    file_path=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/%s_split.mat'%dataset)
     data=sio.loadmat(file_path)['trials'][0]
     s='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     trial_num=len(data)

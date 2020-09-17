@@ -22,17 +22,19 @@ from deep.data_loader import load_dataset, \
 from deep.models.ResNet import ResNet50_MGN
 from deep.loss import TripletHardLoss
 from deep.train import train,setup_seed
-from deep.test import test
+from deep.test import test,extract_feats
 from deep.eval_metric import eval_cmc_map
 from deep.models.utils import CheckPoint
+from deep.plot_match import plot_match
 import torchvision.transforms as T
 import torch as pt
 import torch.nn as nn
 from functools import partial
+from zoo.plot import plot_dataset
 
 if __name__=='__main__':
     setup_seed(0)
-    dataset_dir=os.path.join(os.path.dirname(__file__),'../images/Market-1501-v15.09.15/')
+    dataset_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../images/Market-1501-v15.09.15/')
     checkpoint=CheckPoint()
     checkpoint.load('ResNet50_MGN.tar')
 
@@ -59,7 +61,29 @@ if __name__=='__main__':
     train(net,train_iter,losses,optimizer,num_epochs,scheduler,checkpoint=checkpoint, \
         coeffis=None) #coeffis设为None，表示所有子损失融合权重都为1
 
-    save_dir=os.path.join(os.path.dirname(__file__),'../data/market1501_resnetMGN_gallery.mat')
-    re_calc_gal_fea=True
-    test(net,query_iter,save_dir if not re_calc_gal_fea and os.path.exists(save_dir) else \
-        gallery_iter,eval_cmc_map,save_galFea=save_dir,re_rank=False)
+    save_gal_path=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/market1501_resnetMGN_gallery.mat')
+    re_calc_gal_fea=False #如果（每当）模型重新训练了，要记得置为True，之后可以再改回False节省时间
+    test(net,query_iter,save_gal_path if not re_calc_gal_fea and os.path.exists(save_gal_path) \
+        else gallery_iter,eval_cmc_map,save_galFea=save_gal_path,re_rank=False)
+
+    plot_samples=True
+    persons=9 #可视化测试集样本，需要的参数除了样本特征，还有其ID以及所在摄像头编号，既然三元组损失
+              #或者其他损失的目的都是使相同类别行人距离相近、使不同类行人距离相远，那么在测试集上可以
+              #展示出聚类的效果，注意不同类行人示以不同的颜色，不同摄像头示以不同的记号，考虑到颜色匮
+              #乏，所以展示的行人数量不能太多，必须加以控制
+    dim=3
+    if plot_samples:
+        query_feats=extract_feats(net,query_iter)
+        gallery_feats=extract_feats(net,gallery_iter)
+        test_feats=np.concatenate((query_feats,gallery_feats),axis=1)
+        query_pids,query_cids=list(zip(*(market1501.querySet)))[1:]
+        gallery_pids,gallery_cids=list(zip(*(market1501.gallerySet)))[1:]
+        test_pids=query_pids+gallery_pids
+        test_cids=query_cids+gallery_cids
+
+        unique_k_pids=np.random.permutation(list(set(test_pids)))[:persons]
+        inds=np.where(np.sum(np.array(unique_k_pids)[:,None]==test_pids,axis=0)==1)[0]
+        
+        plot_dataset(test_feats[:,inds],np.array(test_pids)[inds],np.array(test_cids)[inds],dim=dim)
+
+    plot_match(net,query_gallery=market1501,galfeas_path=save_gal_path)

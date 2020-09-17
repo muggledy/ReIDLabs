@@ -13,7 +13,7 @@ from itertools import count
 from numpy.linalg import inv,eig
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import norm_labels,construct_I
 from zoo.cprint import cprint_err,cprint_out
 

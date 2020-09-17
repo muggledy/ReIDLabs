@@ -1,7 +1,7 @@
 import numpy as np
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import euc_dist,norm_labels
 from zoo.cprint import cprint_out
 from functools import reduce,partial
@@ -73,7 +73,7 @@ if __name__=='__main__':
     import os.path
     import matplotlib.pyplot as plt
     from zoo.lda import lda
-    data=scio.loadmat(os.path.join(os.path.dirname(__file__),'../../data/lda_data_demo.mat'))
+    data=scio.loadmat(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../data/lda_data_demo.mat'))
     train_data=data['train_c1'],data['train_c2'],data['train_c3']
     test_data=data['test_c1'],data['test_c2'],data['test_c3']
     markers=['.','x','+']

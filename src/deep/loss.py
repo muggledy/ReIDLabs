@@ -1,9 +1,10 @@
-import torch.nn as nn
 import torch as pt
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from deep.models.utils import euc_dist,hard_sample_mining,dist_DMLI
+import torch.nn.functional as F
+from torch import nn, autograd
 
 class TripletHardLoss(nn.Module):
     '''难样本的三元组损失'''
@@ -38,7 +39,7 @@ class TripletHardLoss(nn.Module):
         #挑选出的距离节点相连，最终反向传播将只会更新这些和损失节点存在连边的距离节点
 
 class AlignedTriLoss(nn.Module):
-    '''AlignedReID有两个难样本三元组损失，特别地，全局分支上的难样本挖掘结果共享给局
+    '''AlignedReID模型有两个难样本三元组损失，特别地，全局分支上的难样本挖掘结果共享给局
        部分支，论文实验表明如果各自为政，两分支分别挖掘难样本，会导致网络梯度更新困难'''
     def __init__(self,margin=0.3):
         super(AlignedTriLoss,self).__init__()
@@ -57,6 +58,81 @@ class AlignedTriLoss(nn.Module):
         dist_an_l=dist_DMLI(lf,lf_hard_neg) #负例样本对对齐后间距
         local_loss=self.ranking_loss_l(dist_ap_l,dist_an_l,-pt.ones_like(dist_ap_l))
         return [global_loss,local_loss] #注意该损失函数返回了两个0维tensor，两个子损失值。加不加括号都一样
+
+'''
+OIM Loss: see in paper[1]
+References:
+[1] Xiao, Tong, et al. "Joint detection and identification feature learning for person search." 
+    Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. 2017.
+[2] 有没有行人检测再识别完整源代码？ - Tong XIAO的回答 - 知乎
+    https://www.zhihu.com/question/46943328/answer/155815511
+'''
+
+class OIM(autograd.Function):
+    # def __init__(self, lut, momentum=0.5):
+    #     super(OIM, self).__init__()
+    #     self.lut = lut
+    #     self.momentum = momentum
+
+    @staticmethod
+    def forward(ctx, inputs, targets, lut, momentum=0.5):
+        ctx.save_for_backward(inputs, targets)
+        ctx.lut = lut
+        ctx.momentum = momentum
+
+        outputs = inputs.mm(lut.t())
+        return outputs
+
+    @staticmethod
+    def backward(ctx, grad_outputs):
+        inputs, targets = ctx.saved_tensors
+        grad_inputs = None
+        if ctx.needs_input_grad[0]:
+            # print(ctx.needs_input_grad)
+            grad_inputs = grad_outputs.mm(ctx.lut)
+
+        for x, y in zip(inputs, targets):
+            ctx.lut[y] = ctx.momentum * ctx.lut[y] + (1. - ctx.momentum) * x
+            ctx.lut[y] /= ctx.lut[y].norm()
+        return grad_inputs, None, None, None
+
+class OIMLoss(nn.Module): #copy from https://github.com/Cysu/open-reid/issues/90
+                          #see usage in /demo/deep_ide_market.py
+    def __init__(self, num_features, num_classes, scalar=1.0, momentum=0.5,
+                 weight=None, reduction='mean', device=None):
+        super(OIMLoss, self).__init__()
+        self.num_features = num_features
+        self.num_classes = num_classes
+        self.momentum = momentum
+        self.scalar = scalar
+        self.weight = weight
+        self.reduction = reduction
+
+        z = pt.zeros(num_classes, num_features)
+        if isinstance(device, str):
+            if device == 'GPU':
+                z = z.cuda()
+            elif device == 'CPU':
+                z = z.cpu()
+        elif isinstance(device, pt.device):
+            z = z.to(device)
+        elif device == None:
+            z = z.cuda()
+
+        self.register_buffer('lut', z)
+
+        self.oim = OIM.apply
+
+    def forward(self, inputs, targets):
+        # inputs = oim(inputs, targets, self.lut, momentum=self.momentum)
+        # inputs=inputs.cpu()   #损失函数这边数据转换到CPU上，虽然速度没怎么变，但不建议这么做，CPU和GPU的负担会同时很重
+        # targets=targets.cpu() #而且损失下降的很慢，很奇怪，我不知道为什么，为了解决数据不在同一device上的问题，我把
+                                #__init__中的z放在GPU上，下降很快，或者直接OIMLoss.cuda()
+        inputs = self.oim(inputs, targets, self.lut, self.momentum)
+        inputs *= self.scalar
+        loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction=self.reduction)
+        return loss
+        # return loss, inputs
 
 if __name__=='__main__':
     target=pt.Tensor([1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8])

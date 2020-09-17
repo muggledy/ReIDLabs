@@ -9,7 +9,7 @@ import numpy as np
 from numpy.linalg import inv,svd,qr
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.lda import get_Hw_Hb_Ht
 from zoo.klda import get_kernel_Hw_Hb_Ht
 from lomo.tools import measure_time

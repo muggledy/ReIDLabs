@@ -3,7 +3,7 @@ import re
 import shutil
 from tqdm import tqdm #https://www.jb51.net/article/166648.htm
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../src/'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../src/'))
 from deep.data_manager import Ana78,process_dir
 from collections import defaultdict
 import numpy as np
@@ -172,6 +172,6 @@ def split_cam_6to2(dataset_dir,probe_cam_ids=[6],gallery_cam_ids=[1,2,3,4,5],onl
     print('SPLIT OVER')
 
 if __name__=='__main__':
-    path=os.path.join(os.path.dirname(__file__),'./Market-1501-v15.09.15/')
+    path=os.path.join(os.path.dirname(os.path.realpath(__file__)),'./Market-1501-v15.09.15/')
     split_cam_like_market1501(path,['query','bounding_box_test'])
     # split_cam_6to2(path,only_one=[False,True])

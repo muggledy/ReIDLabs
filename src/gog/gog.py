@@ -11,7 +11,7 @@ import logging
 import time
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from gog.get_pixel_features import get_pixel_features
 from gog.utils import get_patches,window_nd
 from gog.set_parameter import get_default_parameter

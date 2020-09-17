@@ -20,7 +20,7 @@ from zoo.tools import norm_labels_simultaneously
 
 def load_data(*keys):
     '''return data of specified key(s), valid keys: data4train,data4test,data4query,para'''
-    file_path=os.path.join(os.path.dirname(__file__),'../data/Market_JSTL64.mat')
+    file_path=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/Market_JSTL64.mat')
     if len(keys)==0:
         return
     data=sio.loadmat(file_path)

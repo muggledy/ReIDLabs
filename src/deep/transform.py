@@ -61,7 +61,7 @@ class RandomErasing(object): #comes from
 
 if __name__=='__main__':
     import os.path
-    img_path=os.path.join(os.path.dirname(__file__),'../../images/VIPeR.v1.0/cam_a/000_45.bmp')
+    img_path=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../images/VIPeR.v1.0/cam_a/000_45.bmp')
     from PIL import Image
     img=Image.open(img_path).convert('RGB')
     import torchvision.transforms as T

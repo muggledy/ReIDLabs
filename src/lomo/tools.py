@@ -21,7 +21,7 @@ def getcwd(file=None):
         t=traceback.extract_stack()
         return os.path.dirname(os.path.realpath(t[0].filename))
     elif not os.path.exists(str(file)):
-        file=__file__
+        file=os.path.realpath(__file__)
     return os.path.dirname(os.path.realpath(file))
 
 def normc(a,axis=0):

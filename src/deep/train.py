@@ -5,7 +5,7 @@ import numpy as np
 import random
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import measure_time
 # from functools import partial
 
@@ -51,6 +51,12 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                                                #为None，才会尝试放到多GPU设备上运行，假设存在GPU设备的话
         cudnn.benchmark=True
         net=nn.DataParallel(net) #允许多卡训练，https://blog.csdn.net/zhjm07054115/article/details/104799661/
+                                 #似乎Windows并不支持多卡训练，我收到警告：UserWarning: Pytorch is not compiled with NCCL support
+                                 #https://github.com/pytorch/pytorch/issues/12277
+                                 #https://discuss.pytorch.org/t/pytorch-windows-is-parallelization-over-multiple-gpus-now-possible/59971
+                                 #https://www.programmersought.com/article/7854938878/
+                                 #在工作站上的测试，双2080ti，但不仅是rank-1还是mAP都比我的2070SUPER单卡降低了2个点，而且时间
+                                 #还有所增加
         print('Set cudnn.benchmark=True')
         gpu_num=pt.cuda.device_count()
         if gpu_num==1:

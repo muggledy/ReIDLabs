@@ -100,7 +100,7 @@ class RandomIdSampler2(Sampler): #相较于RandomIdSampler，扩张epoch数据�
 if __name__=='__main__':
     from data_manager import Market1501
     import os.path
-    market1501=Market1501(os.path.join(os.path.dirname(__file__),'../../images/Market-1501-v15.09.15/'))
+    market1501=Market1501(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../images/Market-1501-v15.09.15/'))
     ret=RandomIdSampler2(market1501.trainSet,4,16,statistics=True)
     market1501.print_info()
     print(list(ret))

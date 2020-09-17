@@ -31,7 +31,7 @@ class fine_tune_net(ResNet50_Classify): #原始训练的模型输出有3940个�
 
 if __name__=='__main__':
     setup_seed(0)
-    dataset_dir=os.path.join(os.path.dirname(__file__),'../images/')
+    dataset_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../images/')
     trainSet,querySet,gallerySet=process_viper(os.path.join(dataset_dir,'./VIPeR.v1.0'),split_train_test=True)
     train_iter=load_train_iter(trainSet)
     query_iter=load_query_or_gallery_iter(querySet)

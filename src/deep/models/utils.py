@@ -2,7 +2,7 @@ import torch as pt
 import torch.nn as nn
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../'))
 from zoo.tools import mkdir_if_missing
 from zoo.tools import euc_dist_pro as euc_dist_pro_numpy
 from zoo.cprint import cprint_err
@@ -14,7 +14,7 @@ class FlattenLayer(nn.Module):
         super(FlattenLayer, self).__init__()
     def forward(self, X): # X's shape: (batch_size, ...) #由于并不携带参数
                           #，所以并没有必要写成“层”的形式，直接写成函数即可
-        return X.view(X.shape[0], -1)
+        return X.view(X.size(0), -1)
 
 class Norm1DLayer(nn.Module):
     '''vec/|vec|'''
@@ -30,15 +30,16 @@ def print_net_size(net):
 class CheckPoint:
     def __init__(self,dir_path=None):
         self.dir_path=dir_path if dir_path is not None else \
-            os.path.join(os.path.dirname(__file__),'../../../data/models_checkpoints/')
+            os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../../data/models_checkpoints/')
 
     def save(self,states_info_etc,rel_path=None):
         '''目前传入的states_info_etc（字典）必须包含两个字段，一是网络的参数state_dict，二是当前epoch'''
         self.cur_checkpoint_path=rel_path
-        print('Save model state to %s'%self.cur_checkpoint_path)
+        print('Save model state to %s'%self.cur_checkpoint_path,end='')
         dirpath,filename=os.path.split(self.cur_checkpoint_path)
         mkdir_if_missing(dirpath)
         pt.save(states_info_etc,self.cur_checkpoint_path)
+        print('!')
 
     def load(self,rel_path=None):
         self.cur_checkpoint_path=rel_path
@@ -236,6 +237,32 @@ class LambdaLayer(nn.Module): #有了这个类，譬如要添加flatten层，就
 
     def forward(self, x):
         return self.lambd(x)
+
+class ChannelPool(nn.Module):
+    def forward(self, x):
+        return pt.cat( (pt.max(x,1)[0].unsqueeze(1), pt.mean(x,1).unsqueeze(1)), dim=1 )
+
+class BasicConv(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1, groups=1, relu=True, bn=True, bias=False):
+        super(BasicConv, self).__init__()
+        self.out_channels = out_planes
+        self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
+        self.bn = nn.BatchNorm2d(out_planes,eps=1e-5, momentum=0.01, affine=True) if bn else None
+        self.relu = nn.ReLU() if relu else None
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.bn is not None:
+            x = self.bn(x)
+        if self.relu is not None:
+            x = self.relu(x)
+        return x
+
+def logsumexp_2d(tensor): #used for CBAM(attention)
+    tensor_flatten = tensor.view(tensor.size(0), tensor.size(1), -1)
+    s, _ = pt.max(tensor_flatten, dim=2, keepdim=True)
+    outputs = s + (tensor_flatten - s).exp().sum(dim=2, keepdim=True).log()
+    return outputs
 
 if __name__ == "__main__":
     # k,s=seek_ks_3m(24,6)[:2]

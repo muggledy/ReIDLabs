@@ -28,7 +28,7 @@ import torch.nn as nn
 
 if __name__=='__main__':
     setup_seed(0)
-    dataset_dir=os.path.join(os.path.dirname(__file__),'../images/Market-1501-v15.09.15/')
+    dataset_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../images/Market-1501-v15.09.15/')
     checkpoint=CheckPoint()
     checkpoint.load('ResNet50_Aligned.tar')
 
@@ -48,7 +48,7 @@ if __name__=='__main__':
     train(net,train_iter,losses,optimizer,num_epochs,scheduler,checkpoint=checkpoint, \
         losses_name=['softmaxLoss','globTriHardLoss','localTriHardLoss'],coeffis=None)
     
-    save_dir=os.path.join(os.path.dirname(__file__),'../data/market1501_resnetAligned_gallery.mat')
+    save_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/market1501_resnetAligned_gallery.mat')
     re_calc_gal_fea=True
     # net.aligned=True #aligned
     test(net,query_iter,save_dir if not re_calc_gal_fea and os.path.exists(save_dir) else \

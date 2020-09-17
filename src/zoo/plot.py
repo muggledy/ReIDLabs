@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import norm_labels
 from lomo.tools import getcwd
 from matplotlib.path import Path
@@ -25,7 +25,7 @@ def plot_dataset(X,identity_labels,camera_labels=None,method='PCA',dim=2):
         lda=LinearDiscriminantAnalysis(n_components=dim)
         X=lda.fit_transform(X.T,identity_labels)
     X=X.T
-    if camera_labels==None:
+    if camera_labels is None:
         camera_labels=np.zeros(len(identity_labels))
     else:
         camera_labels=norm_labels(camera_labels)

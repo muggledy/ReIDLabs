@@ -79,7 +79,7 @@ class AES_CBC_IMG(AES_CBC):
 if __name__ == "__main__":
     key="2016SSJL2016SSJL"
     aes=AES_CBC()
-    save_path=os.path.join(os.path.dirname(__file__),'../../data/1024.private')
+    save_path=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../data/1024.private')
     # data='6PYQ1nLHdFYis25Tih3QxoENLadjoLMGwfNpxcoXtYLT2zReJ2k63SAX6H\nL4UjUdPFLEfmg8jH2KZt5WH2stJDzdoH928jqV414xBffeDi3Sw7'
     # key=aes.encrypt(data,key,file=save_path)
     print(aes.decrypt(key,save_path))

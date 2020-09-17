@@ -11,7 +11,7 @@ from sklearn.decomposition import PCA
 #from .lomo.tools import measure_time
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import norm_labels
 from functools import reduce
 

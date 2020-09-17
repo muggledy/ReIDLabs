@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchvision
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../'))
 from deep.models.utils import FlattenLayer,Norm1DLayer,HorizontalPool2d,seek_ks_3m,_weights_init,LambdaLayer
 from torchvision.models.resnet import Bottleneck
 import torch.nn.functional as F
@@ -11,9 +11,10 @@ import copy
 
 class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/details/100566719
     '''最简单的基于ResNet50的分类网络，适用ID损失，但是注意最后一层并未做SoftMax'''
-    def __init__(self,num_ids):
+    def __init__(self,num_ids,oim=False): #扩展，当使用OIM损失时，置oim为True
         super(ResNet50_Classify,self).__init__()
         self.train_mode=True #所有模型都要有该参数
+        self.oim=oim
         resnet50=torchvision.models.resnet50(pretrained=True) #此处要删除原ResNet50的最后一层，因为最后一层是1000分
                                                               #类，不适用于当前任务（譬如Market1601训练集为751分类）
                                                               ##https://github.com/akamaster/pytorch_resnet_cifar10
@@ -28,6 +29,9 @@ class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/d
     def forward(self,X): #输入数据的形状为(batch_size,channels,height,width)
         f=self.base(X)
         if self.train_mode:
+            if self.oim: #当使用OIM损失时，不要使用最后的分类器（全连接层），否则结果会降低非常多，譬如在/demo/deep_ide_market.py
+                         #中的实验，不加分类器，rank-1为87%，map为69，而加上分类器，rank-1只有82%，map只有60
+                return f
             return self.classifier(f)
         else:
             return f

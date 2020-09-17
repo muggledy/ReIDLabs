@@ -4,7 +4,7 @@ from torch.utils.data import Dataset,DataLoader
 import torchvision.transforms as T
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from deep.transform import RandomErasing
 
 def read_image(img_path):
@@ -94,9 +94,9 @@ def load_query_or_gallery_iter(dataset,batch_size=32,transforms=default_test_tra
 
 if __name__=='__main__':
     import sys
-    sys.path.append(os.path.dirname(__file__))
+    sys.path.append(os.path.dirname(os.path.realpath(__file__)))
     from data_manager import Market1501
-    t=Market1501(os.path.join(os.path.dirname(__file__),'../../images/Market-1501-v15.09.15/'))
+    t=Market1501(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../images/Market-1501-v15.09.15/'))
     t.print_info()
     a,b,c=load_dataset(t,32,32)
     for imgs,pids,cids in a:

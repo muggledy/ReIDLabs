@@ -11,7 +11,7 @@ from numpy.linalg import inv,pinv,matrix_rank
 from itertools import count
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.cprint import cprint_out,cprint_err
 
 def learn_dict(X,Y,c=1,max_iter=100,info=False):

@@ -3,7 +3,7 @@ import cv2
 import matplotlib.pyplot as plt
 import sys
 import os.path
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.cprint import cprint_err
 
 def window_nd(a, window, steps = None, axis = None, outlist = False):
@@ -206,7 +206,7 @@ def matrix_regularize(X,eps=0.001):
 
 if __name__=='__main__':
     import os.path
-    cwd=os.path.dirname(__file__)
+    cwd=os.path.dirname(os.path.realpath(__file__))
     '''
     img=cv2.imread(os.path.join(cwd,'test.webp')) #attrib
     plt.subplot(121)

@@ -20,7 +20,7 @@ galFea=normalize(gallery.T)
 # import scipy.io as sio
 # import os
 # data=sio.loadmat(os.path.normpath(os.path.join( \
-#     os.path.dirname(__file__),'../data/gog_viper.mat')))
+#     os.path.dirname(os.path.realpath(__file__)),'../data/gog_viper.mat')))
 # probFea=normalize(data['cam_a'])
 # galFea=normalize(data['cam_b'])
 

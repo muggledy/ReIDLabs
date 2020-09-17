@@ -28,7 +28,7 @@ import torch.nn as nn
 
 if __name__=='__main__':
     setup_seed(0)
-    dataset_dir=os.path.join(os.path.dirname(__file__),'../images/')
+    dataset_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../images/')
     checkpoint=CheckPoint()
     checkpoint.load('ResNet56_jstl(no_viper).tar')
 
@@ -65,7 +65,7 @@ if __name__=='__main__':
     gallery_imgs,gallery_pids,_=list(zip(*(query_gallery.gallerySet)))
     query_gallery.gallerySet=list(zip(gallery_imgs,gallery_pids,[1]*632))
     query_iter,gallery_iter=load_dataset(query_gallery,test_batch_size=batch_size,notrain=True)
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../data/viper_jstl_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/viper_jstl_gallery.mat')
     test(net,query_iter,gal_savedir if os.path.exists(gal_savedir) and not re_calc_gal_feat \
         else gallery_iter,eval_cmc_map,save_galFea=gal_savedir)
     plot_match(net,query_gallery=query_gallery,checkpoint=checkpoint,galfeas_path=gal_savedir)
@@ -74,7 +74,7 @@ if __name__=='__main__':
     print('Evaluate on training set Market1501:')
     query_dir=os.path.join(dataset_dir,'./Market-1501-v15.09.15/query')
     gallery_dir=os.path.join(dataset_dir,'./Market-1501-v15.09.15/bounding_box_test')
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../data/market1501_jstl_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/market1501_jstl_gallery.mat')
     query_gallery=load_query_gallery_dataset(query_dir,gallery_dir,query_num=None,analyse=Ana78(r'([-\d]+)_c(\d)'))
     query_iter,gallery_iter=load_dataset(query_gallery,test_batch_size=batch_size,notrain=True)
     test(net,query_iter,gal_savedir if os.path.exists(gal_savedir) and not re_calc_gal_feat \
@@ -91,7 +91,7 @@ if __name__=='__main__':
             gallerySet.append((img,pid,cid))
     query_iter=load_query_or_gallery_iter(querySet)
     gallery_iter=load_query_or_gallery_iter(gallerySet)
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../data/cuhk01_jstl_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/cuhk01_jstl_gallery.mat')
     test(net,query_iter,gal_savedir if os.path.exists(gal_savedir) and not re_calc_gal_feat \
         else gallery_iter,eval_cmc_map,save_galFea=gal_savedir)
     plot_match(net,querySet=querySet,gallerySet=gallerySet,checkpoint=checkpoint,galfeas_path=gal_savedir)
@@ -106,7 +106,7 @@ if __name__=='__main__':
             gallerySet.append((img,pid,cid))
     query_iter=load_query_or_gallery_iter(querySet)
     gallery_iter=load_query_or_gallery_iter(gallerySet)
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../data/cuhk03_jstl_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/cuhk03_jstl_gallery.mat')
     test(net,query_iter,gal_savedir if os.path.exists(gal_savedir) and not re_calc_gal_feat \
         else gallery_iter,eval_cmc_map,save_galFea=gal_savedir)
     plot_match(net,querySet=querySet,gallerySet=gallerySet,checkpoint=checkpoint,galfeas_path=gal_savedir)
@@ -121,7 +121,7 @@ if __name__=='__main__':
             gallerySet.append((img,pid,cid))
     query_iter=load_query_or_gallery_iter(querySet)
     gallery_iter=load_query_or_gallery_iter(gallerySet)
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../data/prid2011_jstl_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/prid2011_jstl_gallery.mat')
     test(net,query_iter,gal_savedir if os.path.exists(gal_savedir) and not re_calc_gal_feat \
         else gallery_iter,eval_cmc_map,save_galFea=gal_savedir)
     plot_match(net,querySet=querySet,gallerySet=gallerySet,checkpoint=checkpoint,galfeas_path=gal_savedir)
@@ -136,7 +136,7 @@ if __name__=='__main__':
             gallerySet.append((img,pid,cid))
     query_iter=load_query_or_gallery_iter(querySet)
     gallery_iter=load_query_or_gallery_iter(gallerySet)
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../data/3dpes_jstl_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/3dpes_jstl_gallery.mat')
     test(net,query_iter,gal_savedir if os.path.exists(gal_savedir) and not re_calc_gal_feat \
         else gallery_iter,eval_cmc_map,save_galFea=gal_savedir)
     plot_match(net,querySet=querySet,gallerySet=gallerySet,checkpoint=checkpoint,galfeas_path=gal_savedir)
@@ -151,7 +151,7 @@ if __name__=='__main__':
             gallerySet.append((img,pid,cid))
     query_iter=load_query_or_gallery_iter(querySet)
     gallery_iter=load_query_or_gallery_iter(gallerySet)
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../data/ilids_jstl_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/ilids_jstl_gallery.mat')
     test(net,query_iter,gal_savedir if os.path.exists(gal_savedir) and not re_calc_gal_feat \
         else gallery_iter,eval_cmc_map,save_galFea=gal_savedir)
     plot_match(net,querySet=querySet,gallerySet=gallerySet,checkpoint=checkpoint,galfeas_path=gal_savedir)
@@ -166,7 +166,7 @@ if __name__=='__main__':
             gallerySet.append((img,pid,cid))
     query_iter=load_query_or_gallery_iter(querySet)
     gallery_iter=load_query_or_gallery_iter(gallerySet)
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../data/shinpuhkan_jstl_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/shinpuhkan_jstl_gallery.mat')
     test(net,query_iter,gal_savedir if os.path.exists(gal_savedir) and not re_calc_gal_feat \
         else gallery_iter,eval_cmc_map,save_galFea=gal_savedir)
     plot_match(net,querySet=querySet,gallerySet=gallerySet,checkpoint=checkpoint,galfeas_path=gal_savedir)

@@ -196,7 +196,7 @@ if __name__=='__main__':
 
     modelName = 'mobilenetv2_coco_voctrainaug'
     modelFileName = 'deeplab_model.tar.gz'
-    modelDirectory = os.path.join(os.path.dirname(__file__),'Data')
+    modelDirectory = os.path.join(os.path.dirname(os.path.realpath(__file__)),'Data')
     modelFileNameWithFullPath = os.path.join(modelDirectory, modelFileName)
     if not os.path.exists(modelFileNameWithFullPath):
         _DOWNLOAD_URL_PREFIX = 'http://download.tensorflow.org/models/'
@@ -219,8 +219,8 @@ if __name__=='__main__':
     print('model loaded successfully!')
 
 
-    outputDirectory=os.path.join(os.path.dirname(__file__),'Output')
-    inputDirectory=os.path.join(os.path.dirname(__file__),'Input')
+    outputDirectory=os.path.join(os.path.dirname(os.path.realpath(__file__)),'Output')
+    inputDirectory=os.path.join(os.path.dirname(os.path.realpath(__file__)),'Input')
 
     inputImageFileNames=os.listdir(inputDirectory)
     for imageFileName in inputImageFileNames:

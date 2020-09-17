@@ -1,14 +1,14 @@
 import numpy as np
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from lomo.lomo import load_data,get_hsv,get_siltp
 from lomo.tools import getcwd
 from zoo.salience import extractDescriptorsFromCam
 from zoo.cprint import cprint,cprint_out
 from sklearn.decomposition import PCA
 
-cwd=getcwd(__file__)
+cwd=getcwd(os.path.realpath(__file__))
 cam_a_dir=os.path.normpath(os.path.join(cwd,'../../images/VIPeR.v1.0/cam_a')) #probe
 cam_b_dir=os.path.normpath(os.path.join(cwd,'../../images/VIPeR.v1.0/cam_b')) #gallery
 

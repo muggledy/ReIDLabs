@@ -3,7 +3,7 @@ import os
 # from colorama import init,Fore,Back,Style
 import re
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import norm_labels,flatten
 from functools import partial
 from collections import defaultdict
@@ -510,7 +510,7 @@ class MixDataSets: #混合多个数据集，当前是为无监督模型迁移编
         print("  ----------------------------------------")
 
 if __name__=='__main__':
-    dataset_dir=os.path.join(os.path.dirname(__file__),'../../images/')
+    dataset_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../images/')
     mixdatasets=MixDataSets(('cuhk03',os.path.join(dataset_dir,'cuhk03_images/detected')),('cuhk01',os.path.join(dataset_dir,'CUHK01')), \
         ('market1501',os.path.join(dataset_dir,'Market-1501-v15.09.15')),(partial(process_prid2011,like_viper=True), \
         os.path.join(dataset_dir,'./prid2011/single_shot')),('3dpes',os.path.join(dataset_dir,'./3DPeS/RGB/')),\

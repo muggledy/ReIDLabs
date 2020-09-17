@@ -8,7 +8,7 @@ from zoo.viper import get_lomo_viper,get_gog_viper
 from zoo.cspl import cspl
 from sklearn.decomposition import PCA
 
-cwd=getcwd(__file__)
+cwd=getcwd(os.path.realpath(__file__))
 numClass=632
 numFlods=1
 

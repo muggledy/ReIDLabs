@@ -4,7 +4,7 @@ import numpy as np
 import torch.backends.cudnn as cudnn
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from gog.utils import plot_patches
 from zoo.cprint import colors as COLORS
 from deep.data_manager import load_query_gallery_dataset,Ana78, \
@@ -104,10 +104,10 @@ if __name__=='__main__':
     from models.ResNet import ResNet50_Aligned
     from deep.train import setup_seed
     setup_seed(0)
-    pathbase=os.path.join(os.path.dirname(__file__),'../../images/Market-1501-v15.09.15')
+    pathbase=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../images/Market-1501-v15.09.15')
     query_dir=os.path.join(pathbase,'./query')
     gallery_dir=os.path.join(pathbase,'./bounding_box_test')
-    gal_savedir=os.path.join(os.path.dirname(__file__),'../../data/market1501_resnetAligned_gallery.mat')
+    gal_savedir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../data/market1501_resnetAligned_gallery.mat')
     checkpoint=CheckPoint()
     checkpoint.load('ResNet50_Aligned.tar')
     net=ResNet50_Aligned(751)

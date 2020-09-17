@@ -2,8 +2,8 @@ import numpy as np
 import cv2
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
-os.environ['path']=os.environ['path']+';%s'%os.path.normpath(os.path.join(os.path.dirname(__file__),'../../scripts/'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
+os.environ['path']=os.environ['path']+';%s'%os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../scripts/'))
 import rarfile
 import zipfile
 from lomo.tools import calc_cmc,measure_time,getcwd
@@ -17,6 +17,10 @@ from contextlib import closing
 import time
 import struct
 import traceback
+import pickle
+import shutil
+from lxml import etree
+from collections import defaultdict
 
 def euc_dist(X,Y=None):
     '''calc euclidean distance of X(d*m) and Y(d*n), func return 
@@ -407,7 +411,8 @@ def unzip(file_path,save_dir,file_type=None):
     file_path,save_dir=os.path.normpath(file_path),os.path.normpath(save_dir)
     if file_type=='rar': #https://rarfile.readthedocs.io/faq.html#what-are-the-dependencies
         rar_file=rarfile.RarFile(file_path)
-        rar_file.extractall(save_dir)
+        rar_file.extractall(save_dir) #在其他机子测试出现错误rarfile.RarCannotExec: Cannot find working tool
+                                      #实际是第三方库rarfile版本不对，版本见/environment.yaml
         rar_file.close()
     elif file_type=='zip':
         zip_file=zipfile.ZipFile(file_path)
@@ -424,6 +429,9 @@ class Crawler:
     def __init__(self,url=None,save_path=None):
         self.url=url
         self.save_path=save_path
+        self.tempf=os.path.join(getcwd(),'crawler_temp.pickle')
+        self.content=None
+        self.ok=False
         
     def get(self,url=None,method='GET',**kwargs): #最初设计用于下载诸如图片、音乐、压缩包等（二进制）文件，
                                                   #若用于网页则会报错，譬如响应头没有content-length等属性
@@ -440,8 +448,25 @@ class Crawler:
         show_bar=kwargs.get('show_bar')
         if show_bar is not None:
             del kwargs['show_bar']
+        
+        #这里可以往kwargs中添加代理，使用关键字参数proxies，譬如：proxies = {'http':'http://10.10.10.10:8765','https':'https://10.10.10.10:8765'}
+        #https://www.kuaidaili.com/free/
+        #很多时候，返回错误requests.exceptions.ConnectionError: HTTPSConnectionPool(host='1drv.ws', port=443): Max retries exceeded with url
+        #就是这个原因，使用合适的代理就可以解决
+        use_proxy=kwargs.get('use_proxy')
+        if use_proxy is not None:
+            del kwargs['use_proxy']
+        if use_proxy:
+            proxies_dict=get_proxy_kusidaili(pages=3,read_from_local=True)
+            proxies_t={}
+            for _type in proxies_dict:
+                proxies_t[_type]=np.random.choice(proxies_dict[_type])
+            kwargs['proxies']=proxies_t
+            print('use proxy:%s'%(','.join(list(kwargs['proxies'].values()))))
+
         try:
-            if show_bar: #如果给出show_bar参数为真，则会展示下载进度条，默认不展示
+            if show_bar: #如果给出show_bar参数为真，则会展示下载进度条，默认不展示，在此逻辑下支持断点续传，由缓存机制支持
+                         #https://www.cnblogs.com/skying555/p/6218384.html
                 kwargs['stream']=True
                 chunk_size=kwargs.get('chunk_size')
                 if chunk_size is None: #只有在show_bar为真时，才可以传递chunk_size和name参数
@@ -453,24 +478,55 @@ class Crawler:
                     name='未命名'
                 else:
                     del kwargs['name']
+                
+                #缓存机制
+                if not os.path.exists(self.tempf):
+                    with open(self.tempf,'wb') as crawler_temp_f:
+                        pickle.dump({},crawler_temp_f)
+                with open(self.tempf,'rb') as crawler_temp_f:
+                    logs_dict=pickle.load(crawler_temp_f)
+                if logs_dict.get(self.url)==None:
+                    logs_dict[self.url]=[os.path.join(os.path.dirname(self.tempf),'%s.temp'% \
+                        (time.strftime("%Y-%m-%d %H.%M.%S",time.localtime(time.time())))),-1] #最好再加一个是否下载完成的状态码
+                    with open(self.tempf,'wb') as crawler_temp_f:
+                        pickle.dump(logs_dict,crawler_temp_f)
+                if os.path.exists(logs_dict[self.url][0]):
+                    local_file_size=os.stat(logs_dict[self.url][0]).st_size
+                    kwargs['headers']['Range']='bytes=%d-'%local_file_size
+                else:
+                    local_file_size=0
+                if local_file_size==logs_dict[self.url][1]:
+                    print('已下载完毕')
+                    self.ok=True
+                    return self
+                
                 with closing(requests.request(method,self.url,**kwargs)) as response:
                     if raise_error:
                         response.raise_for_status()
-                    self.ok=response.ok and (response.status_code==200)
+                    self.ok=response.ok and (response.status_code in [200,206]) #状态码206表示断点续传
                     if self.ok:
-                        self.content=None
                         self.content_length = float(response.headers['content-length']) # 内容体总大小
                         self.content_type=response.headers['Content-Type']
-                        progress = ProgressBar(name, 0, total=self.content_length)
-                        for data in response.iter_content(chunk_size=chunk_size):
-                            progress.refresh(count=len(data))
-                            if self.content is None:
-                                self.content=data
-                            else:
-                                self.content+=data
+                        progress = ProgressBar(name, 0, total=self.content_length+local_file_size)
+                        progress.refresh(count=local_file_size)
+                        # 缓存机制
+                        if logs_dict[self.url][1]==-1:
+                            logs_dict[self.url][1]=self.content_length
+                            with open(self.tempf,'wb') as crawler_temp_f:
+                                pickle.dump(logs_dict,crawler_temp_f)
+                        with open(logs_dict[self.url][0],'ab') as local_temp_f:
+                            for data in response.iter_content(chunk_size=chunk_size):
+                                progress.refresh(count=len(data))
+                                # if self.content is None: #我不想占用内存，所以当使用show_bar方式下载，在任何时候都可以
+                                                           #将self.content置为None，因为数据是保存在本地临时文件中
+                                #     self.content=data
+                                # else:
+                                #     self.content+=data
+                                local_temp_f.write(data)
+                                local_temp_f.flush()
                     else:
                         print('Crawler Failed(%d) from %s!'%(response.status_code,self.url))
-            else:
+            else: #可以下载小文件，该逻辑块不支持断点续传，也不show_bar
                 print('Downloading from %s...'%self.url)
                 response=requests.request(method,self.url,**kwargs)
                 if raise_error: #如果给出raise_error参数为真，则在response!=200时抛出异常，默认不抛
@@ -484,12 +540,14 @@ class Crawler:
                         float(self.content_length)/1048576))
                 else:
                     print('Crawler Failed(%d)!'%response.status_code)
-        except requests.HTTPError:
+        # except requests.HTTPError:
+        #     raise
+        # except Exception as e:
+        #     self.ok=False
+        #     # print('***',type(e),e,'***')
+        #     traceback.print_exc()
+        except:
             raise
-        except Exception as e:
-            self.ok=False
-            # print('***',type(e),e,'***')
-            traceback.print_exc()
         return self #返回爬虫自身
         
     def save(self,save_path=None):
@@ -502,38 +560,110 @@ class Crawler:
             elif self.save_path is None:
                 self.save_path=os.path.join(getcwd(),'result') #如果没有给出保存路径，则默认保存到此函数的
                                                                #调用者所在目录下名为result.<suffix>的文件下
+            from_local=False
+            if self.content is None: #如果self.content为空，则表示使用的是show_bar方式下载，文件已经保存在本地临时文件中
+                from_local=True
+                self.content=self.read_from_temp()
             suffix=filetype(self.content) #可以通过文件头标识判断，这种方式更准确
                                           #https://www.cnblogs.com/senior-engineer/p/9541719.html
-            if suffix=='unknown':
-                suffix=self.content_type.split('/')[-1] #从响应头中获取文件后缀，用于辅助上面的文件头标识判断法
-                if suffix=='x-rar-compressed':
-                    suffix='rar'
-                else:
-                    pass
+            # if suffix=='unknown':
+            #     suffix=self.content_type.split('/')[-1] #从响应头中获取文件后缀，用于辅助上面的文件头标识判断法
+            #     if suffix=='x-rar-compressed':
+            #         suffix='rar'
+            #     else:
+            #         pass
             self.save_file_suffix=suffix
             if not self.save_path.lower().endswith(suffix.lower()): #注意这边会自动添加后缀！
                 self.save_path+='.%s'%suffix
             self.save_path=os.path.normpath(self.save_path)
+            # if from_local:
+            #     rename=os.path.join(os.path.dirname(logs_dict[self.url][0]),os.path.basename(self.save_path))
+            #     os.rename(logs_dict[self.url][0],rename)
+            #     if not os.path.normpath(rename)==os.path.normpath(self.save_path):
+            #         shutil.move(rename,os.path.dirname(self.save_path))
+            # else:
+            #     with open(self.save_path,'wb') as f:
+            #         f.write(self.content)
             with open(self.save_path,'wb') as f:
                 f.write(self.content)
-            print('Save to %s'%self.save_path)
+            print('Saved to %s'%self.save_path)
+            # del logs_dict[self.url]
+            # with open(self.tempf,'wb') as crawler_temp_f:
+            #     pickle.dump(logs_dict,crawler_temp_f)
+            if from_local: #当下载大文件，建议使用show_bar方式，不会长期占用大量内存
+                self.content=None
         else:
             print('Save Nothing(Crawler Failed)!')
         
     def show_img(self): #如果获取的是图片，可以调用此方法
         if self.ok:
+            from_local=False
+            if self.content is None:
+                from_local=True
+                self.content=self.read_from_temp()
             img=Image.open(BytesIO(self.content))
+            if from_local:
+                self.content=None
             img.show()
         else:
             print('Show Nothing(Crawler Failed)!')
         
     def play_audio(self): #https://pythonbasics.org/python-play-sound/
         if self.ok:
+            from_local=False
+            if self.content is None:
+                from_local=True
+                self.content=self.read_from_temp()
             Audio().play(self.content)
+            if from_local:
+                self.content=None
         else:
             print('Play Nothing(Crawler Failed)!')
 
-    def unzip(self,save_dir=None): #注意unzip之前必须先save压缩文件！
+    def read_from_temp(self,url=None):
+        if url==None:
+            url=self.url
+        with open(self.tempf,'rb') as crawler_temp_f:
+            logs_dict=pickle.load(crawler_temp_f)
+            with open(logs_dict[url][0],'rb') as local_temp_f:
+                content=local_temp_f.read()
+        return content
+
+    def clear_temp(self,url=None,check_finish=True):
+        if url==None:
+            url=self.url
+        if url==None:
+            raise ValueError('(clear_temp)Search URL can\'t be None!')
+        if os.path.exists(self.tempf):
+            with open(self.tempf,'rb') as crawler_temp_f:
+                logs_dict=pickle.load(crawler_temp_f)
+            if logs_dict.get(url)==None:
+                print('(clear_temp)No this record or the temp file has been cleared!')
+            else:
+                delete_flag=True
+                local_temp_f=logs_dict[url][0]
+                if os.path.exists(local_temp_f):
+                    if check_finish:
+                        local_file_size=os.stat(local_temp_f).st_size
+                        if local_file_size!=logs_dict[url][1]:
+                            delete_flag=False
+                    if delete_flag:
+                        os.remove(local_temp_f)
+                if delete_flag:
+                    print('(clear_temp)Delete record and temp file %s'%local_temp_f)
+                    del logs_dict[url]
+                    if not logs_dict: #如果记录为空的话，连同记录文件也删除
+                        if os.path.exists(self.tempf):
+                            os.remove(self.tempf)
+                    else:
+                        with open(self.tempf,'wb') as crawler_temp_f:
+                            pickle.dump(logs_dict,crawler_temp_f)
+                else:
+                    print('(clear_temp)Because temp file isn\'t finished(CHECKED), NO delete!')
+        else:
+            raise ValueError('(clear_temp)No temp recorder file(%s)!'%self.tempf)
+
+    def unzip(self,save_dir=None,delete=False): #注意unzip之前必须先save压缩文件！
         if self.ok:
             if not os.path.exists(self.save_path):
                 raise ValueError('Must save the rar/zip file firstly, then do unzip!')
@@ -545,6 +675,9 @@ class Crawler:
                 print('Create dir %s'%save_dir)
                 os.makedirs(save_dir)
             unzip(self.save_path,save_dir,self.save_file_suffix)
+            if delete:
+                print('(unzip)Delete origin zip/rar file %s'%self.save_path)
+                os.remove(self.save_path)
         else:
             print('Extract Nothing(Crawler Failed)!')
         
@@ -610,12 +743,44 @@ def split_dataset_trials(pids,cids,dataset,trials=10): #通过/images/download_d
             yield ret
     elif dataset=='':
         pass
-        
-if __name__=='__main__':
-    #url='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBZ204d3BjSVhDanNnNHRuV2VyWDNxWk9BM0JBcUE=.jpg'
-    url='http://ting6.yymp3.net:82/new10/gaojin/12.mp3'
-    crawler=Crawler(url)
-    crawler(show_bar=True)
-    # crawler.show_img()
-    crawler.play_audio()
+
+def get_proxy_kusidaili(base_url='https://www.kuaidaili.com/free/inha/',pages=20,read_from_local=False): #comes from https://www.77169.net/html/262105.html
+    def _f(url):
+        header = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'}
+        response = requests.get(url=url, headers=header)
+        selector = etree.HTML(response.content.decode())
+        d=defaultdict(list)
+        for i in range(1,16):
+            _ip = selector.xpath('//*[@id="list"]/table/tbody/tr[%d]/td[1]/text()' %(i))[0]
+            _port = selector.xpath('//*[@id="list"]/table/tbody/tr[%d]/td[2]/text()' %(i))[0]
+            _type = selector.xpath('//*[@id="list"]/table/tbody/tr[%d]/td[4]/text()'%(i))[0].lower()
+            d[_type].append('%s://%s:%s'%(_type,_ip,_port))
+        return d
     
+    local_save_file=os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../data/kuaidaili.pickle'))
+    if read_from_local and os.path.exists(local_save_file):
+        print('get proxies from local %s'%local_save_file)
+        with open(local_save_file,'rb') as f:
+            ret=pickle.load(f)
+        return ret
+    tdicts=defaultdict(list)
+    print('get proxies from the Internet(%s)...'%base_url)
+    for i in range(1,pages+1):
+        print('page %d'%i,end='\r')
+        for k,v in _f('%s%s'%(base_url,str(i))).items():
+            tdicts[k].extend(v)
+        time.sleep(1.5+np.random.rand()*3.5)
+    with open(local_save_file,'wb') as f:
+        print('save proxies to local %s'%local_save_file)
+        pickle.dump(tdicts,f)
+    return tdicts
+
+if __name__=='__main__':
+    url='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBZ204d3BjSVhDanNnNHRuV2VyWDNxWk9BM0JBcUE=.jpg'
+    # url='http://ting6.yymp3.net:82/new10/gaojin/12.mp3'
+    crawler=Crawler(url)
+    crawler(show_bar=False,use_proxy=False)
+    crawler.show_img()
+    # crawler.play_audio()
+    crawler.clear_temp()
+    # get_proxy_kusidaili(pages=3,read_from_local=True)

@@ -95,7 +95,7 @@ def train(dataloader,epoches=200,plot=False,**kwargs):
     ###初始化模型参数
     save_dir_base=kwargs.get('save_dir_base')
     if save_dir_base is None:
-        save_dir_base=os.path.join(os.path.dirname(__file__),'./out')
+        save_dir_base=os.path.join(os.path.dirname(os.path.realpath(__file__)),'./out')
     save_dir_name=kwargs.get('save_dir_name')
     if save_dir_name is None:
         save_dir_name=time.strftime("%Y-%m-%d %HH%MM%SS",time.localtime())
@@ -218,7 +218,7 @@ if __name__=='__main__':
     import torchvision.transforms as T
     from PIL import Image
     ### 准备数据：https://people.eecs.berkeley.edu/~taesung_park/CycleGAN/datasets/
-    data_root=os.path.join(os.path.dirname(__file__),'./datasets/summer2winter/')
+    data_root=os.path.join(os.path.dirname(os.path.realpath(__file__)),'./datasets/summer2winter/')
     batch_size=1
     size=(256,256)
     transforms=[T.Resize([int(1.12*i) for i in size], Image.BICUBIC), 

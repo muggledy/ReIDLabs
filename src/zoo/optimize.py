@@ -2,7 +2,7 @@ import numpy as np
 from numpy.linalg import inv,pinv
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.cprint import cprint_out,cprint_err
 import logging
 log = logging.getLogger("feature_sign")

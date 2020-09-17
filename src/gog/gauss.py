@@ -1,6 +1,6 @@
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from gog.logm import logm0,logm1
 from gog.utils import matrix_regularize
 import numpy as np

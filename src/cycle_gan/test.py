@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from gog.utils import plot_patches
 from main import linear_stretch_img
 
@@ -39,12 +39,12 @@ def test(dataloader,state_savedir_path):
 if __name__=='__main__':
     import torchvision.transforms as T
     from PIL import Image
-    data_root=os.path.join(os.path.dirname(__file__),'./datasets/horse2zebra/')
+    data_root=os.path.join(os.path.dirname(os.path.realpath(__file__)),'./datasets/horse2zebra/')
     batch_size=3
     num=20
     transforms = [ T.ToTensor(),
                    T.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
     dataloader = DataLoader(ImageDataset(data_root, transforms=transforms, mode='test', num=num), \
         batch_size=batch_size, shuffle=False, num_workers=4, drop_last=False)
-    state_dir=os.path.join(os.path.dirname(__file__),'./out/horse2zebra/')
+    state_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'./out/horse2zebra/')
     test(dataloader,state_dir)

@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import os.path
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from gog.utils import to_ycbcr
 import logging
 logger = logging.getLogger(__name__)

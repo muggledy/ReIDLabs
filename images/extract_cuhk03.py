@@ -36,7 +36,7 @@ import numpy as np
 
 def extract_cuhk03_images(mat_file,save_dir=None):
     if save_dir is None:
-        save_dir=os.path.dirname(__file__) #默认保存到此脚本所在即/images/目录下
+        save_dir=os.path.dirname(os.path.realpath(__file__)) #默认保存到此脚本所在即/images/目录下
     save_dir=os.path.join(save_dir,'./cuhk03_images/')
     data=scio.loadmat(mat_file)
     sub_train_tag=['detected','labeled']
@@ -67,4 +67,4 @@ def extract_cuhk03_images(mat_file,save_dir=None):
     scio.savemat(os.path.join(save_dir,'testsets.mat'),{'testsets':np.stack(testsets)})
 
 if __name__=='__main__':
-    extract_cuhk03_images(os.path.join(os.path.dirname(__file__),'./cuhk03/cuhk-03.mat'))
+    extract_cuhk03_images(os.path.join(os.path.dirname(os.path.realpath(__file__)),'./cuhk03/cuhk-03.mat'))
