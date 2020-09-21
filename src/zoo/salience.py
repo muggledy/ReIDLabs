@@ -13,7 +13,6 @@ from skimage import feature
 import numpy as np
 import os
 import imutils
-from os import listdir
 import pdb
 import time
 import multiprocessing as mp
@@ -164,7 +163,7 @@ def extractDataForOneImage(image,grid_step=4, patchSize=10, nbins=32,scales=[1,0
 
 def extractDescriptorsFromCam(camDir,featDir=None,width=None,height=None,patchSize=10,gridStep=4,nbins=32,scales=[1,0.75,0.5],level='image'):
     
-    images=[os.path.join(camDir,i) for i in os.listdir(camDir) if i.endswith(('.jpg','.png','.bmp'))]
+    images=[os.path.join(camDir,i) for i in sorted(os.listdir(camDir)) if i.endswith(('.jpg','.png','.bmp'))]
     n=len(images)
     
     if width==None or height==None:

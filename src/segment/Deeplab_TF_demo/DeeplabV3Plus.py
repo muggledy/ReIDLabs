@@ -222,7 +222,7 @@ if __name__=='__main__':
     outputDirectory=os.path.join(os.path.dirname(os.path.realpath(__file__)),'Output')
     inputDirectory=os.path.join(os.path.dirname(os.path.realpath(__file__)),'Input')
 
-    inputImageFileNames=os.listdir(inputDirectory)
+    inputImageFileNames=sorted(os.listdir(inputDirectory))
     for imageFileName in inputImageFileNames:
 
         imageNameWithFullPath=os.path.join(inputDirectory,imageFileName)

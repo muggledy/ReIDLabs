@@ -111,15 +111,17 @@ class OIMLoss(nn.Module): #copy from https://github.com/Cysu/open-reid/issues/90
         z = pt.zeros(num_classes, num_features)
         if isinstance(device, str):
             if device == 'GPU':
-                z = z.cuda()
+                device=pt.device('cuda')
             elif device == 'CPU':
-                z = z.cpu()
+                device=pt.device('cpu')
         elif isinstance(device, pt.device):
-            z = z.to(device)
+            pass
         elif device == None:
-            z = z.cuda()
+            device=pt.device('cuda' if pt.cuda.is_available() else 'cpu')
+        elif isinstance(device,int): #单卡时，要确保数据是放在指定设备上，多卡时（DP），要确保是在“主设备”上
+            device=pt.device('cuda',device)
 
-        self.register_buffer('lut', z)
+        self.register_buffer('lut', z.to(device))
 
         self.oim = OIM.apply
 

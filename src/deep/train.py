@@ -19,8 +19,40 @@ def setup_seed(seed):
 
 @measure_time
 def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,**kwargs):
-    '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]即序列形式。总损失loss
-       =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...'''
+    '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]，即序列形式。总体损失loss
+       =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...
+       device的值可以是：str('cpu' or 'cuda'),scalar(0, index of GPU),list([0,1], indexes list 
+       of GPU),None(优先使用GPU),torch.device,对于list，表示多卡训练，特别的，可以取值'DP'，表示
+       使用全部GPU设备并行'''
+    DP_flag=False #Data Parallel
+    if device is None:
+        device=pt.device('cuda') if pt.cuda.is_available() else pt.device('cpu') #此时如果存在GPU，优先使用GPU。注意
+                                    #当使用'cuda'作为运行设备时，与使用'cuda:X'（torch.cuda.current_device()）是一致的
+                                    #当前使用的设备总是返回0（号逻辑设备）
+                                    #https://discuss.pytorch.org/t/torch-cuda-current-device-always-return-0/26530
+    elif isinstance(device,str):
+        if device in ['cpu','cuda']:
+            device=pt.device(device)
+        elif device=='DP': #此时DataParallel会自动检测并使用所有可用的GPU设备，(逻辑)设备列表记作g（0,1,2,...）,总是一个从0增长的序列
+                           #但是具体映射到哪个物理设备，是由初始设置的os.environ['CUDA_VISIBLE_DEVICES']最终决定
+            DP_flag=True
+            device_ids=None
+            device=pt.device('cuda',0) #所以这里应该设为g[0]，也就是0号逻辑设备，参见https://www.cnblogs.com/marsggbo/p/10962763.html
+                                       #If you have 4 gpus: 0, 1, 2, 3. And run CUDA_VISIBLE_DEVICES=1,2 in xxx.py. 
+                                       #Then the device that you will see within python are device 0, 1. Using 
+                                       #device 0 in your code will use device 1 from global numering. Using device 1 
+                                       #in your code will use 2 outside.
+    elif isinstance(device,int):
+        device=pt.device('cuda',device)
+    elif isinstance(device,list):
+        DP_flag=True
+        device_ids=device
+        device=pt.device('cuda',device[0]) #pt.device总是指定的是逻辑设备。当采用DP时，逻辑设备列表的第一个才是“主设备”，模型、数据都是拷贝到此设备上
+    elif isinstance(device,pt.device):
+        pass
+    else:
+        raise ValueError('Invalid device!')
+    
     if checkpoint is not None and checkpoint.loaded:
         net.load_state_dict(checkpoint.states_info_etc['state'])
         start_epoch=checkpoint.states_info_etc['epoch']+1
@@ -28,7 +60,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         for state in optimizer.state.values(): #https://blog.csdn.net/weixin_41848012/article/details/105675735
             for k, v in state.items():
                 if pt.is_tensor(v):
-                    state[k] = v.cuda()
+                    state[k] = v.to(device)
         if checkpoint.states_info_etc.get('scheduler'):
             scheduler.load_state_dict(checkpoint.states_info_etc['scheduler'])
     else:
@@ -43,28 +75,28 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     #（以释放空间）
     checkpoint.loaded=False #与此同时，将loaded标志置为False，下次必须重新加载才行
 
-    flag='cuda' if pt.cuda.is_available() else 'cpu' #如果存在GPU，优先使用GPU
-    origin_device=device
-    device=pt.device(flag) if device is None else device
     net=net.to(device)
-    if flag=='cuda' and origin_device is None: #如果device已经人为给出，即拥有最高优先级。如果没有给出
-                                               #为None，才会尝试放到多GPU设备上运行，假设存在GPU设备的话
+    if device.type=='cuda':
         cudnn.benchmark=True
-        net=nn.DataParallel(net) #允许多卡训练，https://blog.csdn.net/zhjm07054115/article/details/104799661/
+        print('Set cudnn.benchmark %s'%(cudnn.benchmark))
+        if DP_flag:
+            gpu_num=pt.cuda.device_count()
+            print('Use Data Parallel to Wrap Model',end='')
+            net=nn.DataParallel(net,device_ids=device_ids) #允许多卡训练，https://blog.csdn.net/zhjm07054115/article/details/104799661/
                                  #似乎Windows并不支持多卡训练，我收到警告：UserWarning: Pytorch is not compiled with NCCL support
                                  #https://github.com/pytorch/pytorch/issues/12277
                                  #https://discuss.pytorch.org/t/pytorch-windows-is-parallelization-over-multiple-gpus-now-possible/59971
                                  #https://www.programmersought.com/article/7854938878/
                                  #在工作站上的测试，双2080ti，但不仅是rank-1还是mAP都比我的2070SUPER单卡降低了2个点，而且时间
-                                 #还有所增加
-        print('Set cudnn.benchmark=True')
-        gpu_num=pt.cuda.device_count()
-        if gpu_num==1:
-            print('Try training on multi-GPU, but you have only one GPU:%d'%pt.cuda.current_device())
+                                 #还有所增加。好吧，直接忽略该警告即可
+            if gpu_num==1:
+                print(', but you have only one GPU')
+            else:
+                print('\nTraining on %d GPU devices...'%gpu_num)
         else:
-            print('Training on %d GPU devices'%gpu_num)
+            print('Running on device %s...'%device)
     else:
-        print('Now training on %s...'%device)
+        print('Now training on %s(But GPU is proposed to accelerate)...'%device)
     
     net.train()
     if isinstance(net,nn.DataParallel):

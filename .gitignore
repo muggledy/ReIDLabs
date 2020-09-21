@@ -20,4 +20,5 @@
 /src/segment/Deeplab_TF_demo/Output/*
 !/src/segment/Deeplab_TF_demo/Output/.gitkeep
 /.vscode/*
+/.idea/*
 **/__pycache__/

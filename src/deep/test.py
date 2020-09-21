@@ -31,10 +31,12 @@ def extract_feats(net,data_iter,device=None,**kwargs):
     device=pt.device('cuda' if pt.cuda.is_available() else 'cpu') if device is None else device
     net=net.to(device)
     net.eval()
-    if isinstance(net,nn.DataParallel):
-        net.module.train_mode=False
-    else:
-        net.train_mode=False
+    # if isinstance(net,nn.DataParallel): #同test函数
+    #     net.module.train_mode=False
+    # else:
+    #     net.train_mode=False
+    net.train_mode=False
+
     feats=[]
     with pt.no_grad():
         for batch,*_ in data_iter:
@@ -54,10 +56,12 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
     device=pt.device('cuda' if pt.cuda.is_available() else 'cpu') if device is None else device
     net=net.to(device)
     net.eval()
-    if isinstance(net,nn.DataParallel):
-        net.module.train_mode=False
-    else:
-        net.train_mode=False
+    # if isinstance(net,nn.DataParallel): #当时只是为了防止出错，其实目前这里的模型不可能是DataParallel类型
+    #     net.module.train_mode=False     #而且在测试阶段也没必要做DataParallel
+    # else:
+    #     net.train_mode=False
+    net.train_mode=False
+
     with pt.no_grad():
         q_feas,q_pids,q_cids=[],[],[]
         for i,(batchImgs,pids,cids) in enumerate(query_iter):
