@@ -8,23 +8,27 @@ from deep.models.utils import FlattenLayer,Norm1DLayer,HorizontalPool2d,seek_ks_
 from torchvision.models.resnet import Bottleneck
 import torch.nn.functional as F
 import copy
+import deep.models.resnet56 as ResNet56
 
 class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/details/100566719
-    '''最简单的基于ResNet50的分类网络，适用ID损失，但是注意最后一层并未做SoftMax'''
-    def __init__(self,num_ids,oim=False): #扩展，当使用OIM损失时，置oim为True
+    '''最简单的基于ResNet50的分类网络，适用ID损失，目前还可以用于使用OIM损失，也可以传递其他主干网backbone，譬如CBAM中
+       定义的resnet50，否则使用标准resnet50，参数c_out是backbone去除最后分类层的输出节点数，譬如resnet50对应2048维，
+       resnet56则对应64维'''
+    def __init__(self,num_ids,oim=False,backbone=None,c_out=2048): #当使用OIM损失时，置oim为True
         super(ResNet50_Classify,self).__init__()
-        self.train_mode=True #所有模型都要有该参数
+        self.train_mode=True #所有重识别网络模型都要有该参数
         self.oim=oim
-        resnet50=torchvision.models.resnet50(pretrained=True) #此处要删除原ResNet50的最后一层，因为最后一层是1000分
+        if backbone is None:
+            backbone=torchvision.models.resnet50(pretrained=True) #此处要删除原ResNet50的最后一层，因为最后一层是1000分
                                                               #类，不适用于当前任务（譬如Market1601训练集为751分类）
-                                                              ##https://github.com/akamaster/pytorch_resnet_cifar10
+                                                              #https://github.com/akamaster/pytorch_resnet_cifar10
         self.base=nn.Sequential(
-            *(list(resnet50.children())[:-1]),
+            *(list(backbone.children())[:-1]),
             FlattenLayer(), #打印resnet50可知倒数第二层输出形状为(batch_size,2048,1,1)
                             #，需要做一下Flatten删除最后两个空维以供后面全连接层的输入
             # Norm1DLayer() #可选，标准化特征向量，使长度为1
-        ) #基干网（提取特征）
-        self.classifier=nn.Linear(2048,num_ids) #分类网，输出层节点数等于分类数，全连接层
+        ) #基干网（提取特征），需删除原始resnet的最后一层分类层
+        self.classifier=nn.Linear(c_out,num_ids) #分类层，输出层节点数等于行人类别总数
 
     def forward(self,X): #输入数据的形状为(batch_size,channels,height,width)
         f=self.base(X)
@@ -37,7 +41,7 @@ class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/d
             return f
 
 class ResNet50_Classify_Metric(nn.Module):
-    '''ResNet50_Classify的改造版，有少许不同，既适用ID损失，也适用度量损失（譬如三元组损失等度量学习方法），或者两者兼具'''
+    '''对原始ResNet50_Classify的改造版，有少许不同，既适用ID损失，也适用度量损失（譬如三元组损失等度量学习方法），或者两者兼具'''
     def __init__(self,num_ids,loss={'softmax','metric'}): #如果只使用metric，那么num_ids参数无需提供
         super(ResNet50_Classify_Metric,self).__init__()
         self.train_mode=True
@@ -289,5 +293,11 @@ class ResNet50_MGN(nn.Module): #copy from https://github.com/seathiefwang/MGN-py
             predict = pt.cat([fg_p1, fg_p2, fg_p3, f0_p2, f1_p2, f0_p3, f1_p3, f2_p3], dim=1)
             return predict
 
+class ResNet56_Classify(ResNet50_Classify): #使用在CIFRA10上预训练的resnet56做IDE重识别，结果非常低，收敛速度非常慢，100个epoch，stepLR(20)损失最终
+                                    #只降低到1~2（而在预训练的resnet50上可以降低到0.00x），rank-1只有50%，mAP不到30。我没有找到在imagenet上预训练的权重参数
+                                    #我的意思仅仅是该resnet56收敛速度慢，并不代表它的损失不能下降到0.x%
+    def __init__(self,num_ids,pretrained=True,oim=False):
+        super(ResNet56_Classify,self).__init__(num_ids,oim,ResNet56.resnet56(pretrained=pretrained),64)
+
 if __name__=='__main__':
-    pass
+    net=ResNet56_Classify(751)

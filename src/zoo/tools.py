@@ -526,18 +526,18 @@ class Crawler:
                                 local_temp_f.flush()
                     else:
                         print('Crawler Failed(%d) from %s!'%(response.status_code,self.url))
-            else: #可以下载小文件，该逻辑块不支持断点续传，也不show_bar
+            else: #可以下载小文件，该逻辑块不支持断点续传，也不show_bar。但是不会因为不存在content-length就报错
                 print('Downloading from %s...'%self.url)
                 response=requests.request(method,self.url,**kwargs)
                 if raise_error: #如果给出raise_error参数为真，则在response!=200时抛出异常，默认不抛
                     response.raise_for_status()
                 self.ok=response.ok and (response.status_code==200)
                 if self.ok:
-                    self.content_type=response.headers['Content-Type']
-                    self.content_length=response.headers['Content-Length']
+                    self.content_type=response.headers.get('Content-Type')
+                    self.content_length=response.headers.get('Content-Length')
                     self.content=response.content
-                    print('Get response[%s](%.2fM) successfully!'%(self.content_type, \
-                        float(self.content_length)/1048576))
+                    print('Get response%s%s successfully!'%('[%s]'%self.content_type if self.content_type is not None else '', \
+                        '(%.2fM)'%(float(self.content_length)/1048576) if self.content_length is not None else ''))
                 else:
                     print('Crawler Failed(%d)!'%response.status_code)
         # except requests.HTTPError:
@@ -550,7 +550,7 @@ class Crawler:
             raise
         return self #返回爬虫自身
         
-    def save(self,save_path=None):
+    def save(self,save_path=None,auto_detect_suffix=True):
         if self.ok:
             if save_path is not None:
                 self.save_path=os.path.normpath(save_path)
@@ -564,18 +564,23 @@ class Crawler:
             if self.content is None: #如果self.content为空，则表示使用的是show_bar方式下载，文件已经保存在本地临时文件中
                 from_local=True
                 self.content=self.read_from_temp()
-            suffix=filetype(self.content) #可以通过文件头标识判断，这种方式更准确
+            if auto_detect_suffix: #如果给出的save_path不包含文件后缀，也就是需要自动检测后缀标志为真时
+                # print('auto detect suffix of downloaded binary file')
+                suffix=filetype(self.content) #可以通过文件头标识判断，这种方式更准确
                                           #https://www.cnblogs.com/senior-engineer/p/9541719.html
-            # if suffix=='unknown':
-            #     suffix=self.content_type.split('/')[-1] #从响应头中获取文件后缀，用于辅助上面的文件头标识判断法
-            #     if suffix=='x-rar-compressed':
-            #         suffix='rar'
-            #     else:
-            #         pass
-            self.save_file_suffix=suffix
-            if not self.save_path.lower().endswith(suffix.lower()): #注意这边会自动添加后缀！
-                self.save_path+='.%s'%suffix
-            self.save_path=os.path.normpath(self.save_path)
+                # if suffix=='unknown':
+                #     suffix=self.content_type.split('/')[-1] #从响应头中获取文件后缀，用于辅助上面的文件头标识判断法
+                #     if suffix=='x-rar-compressed':
+                #         suffix='rar'
+                #     else:
+                #         pass
+                self.save_file_suffix=suffix
+                if not self.save_path.lower().endswith(suffix.lower()): #注意这边会自动添加后缀！
+                    self.save_path+='.%s'%suffix
+                self.save_path=os.path.normpath(self.save_path)
+            else: #若save_path已经包含后缀
+                suffix=os.path.splitext(self.save_path)[1].split('.')[-1].lower()
+                self.save_file_suffix=suffix
             # if from_local:
             #     rename=os.path.join(os.path.dirname(logs_dict[self.url][0]),os.path.basename(self.save_path))
             #     os.rename(logs_dict[self.url][0],rename)
@@ -782,5 +787,5 @@ if __name__=='__main__':
     crawler(show_bar=False,use_proxy=False)
     crawler.show_img()
     # crawler.play_audio()
-    crawler.clear_temp()
+    # crawler.clear_temp()
     # get_proxy_kusidaili(pages=3,read_from_local=True)

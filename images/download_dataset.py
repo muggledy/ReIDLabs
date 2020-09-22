@@ -14,8 +14,6 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../src
 from zoo.tools import Crawler,unzip
 from lomo.tools import getcwd
 
-crawler=Crawler()
-
 #注意翻墙~
 link_eigen='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpMnVVUDdkM2puOGd4czFLP2U9NG9PUjRM.mp3'
 link_market1501='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpMnBfejlaUFVYMHNnOTlMP2U9Z3JZWGN5.mp3'
@@ -37,8 +35,9 @@ def download_dateset(dataset,save_dir=None): #注意压缩数据集下载到本�
                                            #执行报错。https://www.cnblogs.com/ajaxa/p/9016475.html
                                            #http://www.cppcns.com/jiaoben/python/107466.html
     link=globals().get('link_%s'%dataset)
+    crawler=Crawler()
     if link is not None:
-        crawler.get(link,show_bar=True,name=dataset,chunk_size=1024*1024*2,use_proxy=True)
+        crawler.get(link,show_bar=True,name=dataset,chunk_size=1024*1024*2,use_proxy=True,raise_error=True)
         crawler.save(os.path.join(save_dir,dataset))
         crawler.unzip(save_dir,delete=True)
         crawler.clear_temp()
@@ -48,7 +47,8 @@ def download_dateset(dataset,save_dir=None): #注意压缩数据集下载到本�
 def download_eigen(save_dir=None): #一定要解压到/src/third-party/目录下
     if save_dir is None:
         save_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../src/third-party/')
-    crawler.get(link_eigen,show_bar=True,name='eigen',chunk_size=1024*1024*2,use_proxy=True)
+    crawler=Crawler()
+    crawler.get(link_eigen,show_bar=True,name='eigen',chunk_size=1024*1024*2,use_proxy=True,raise_error=True)
     crawler.save(os.path.join(save_dir,'eigen'))
     crawler.unzip(save_dir,delete=True)
     crawler.clear_temp()
@@ -56,7 +56,7 @@ def download_eigen(save_dir=None): #一定要解压到/src/third-party/目录下
 if __name__=='__main__':
     # download_dateset('ilids')
     # download_dateset('prid2011')
-    download_dateset('cuhksysu')
+    download_dateset('3dpes')
     # download_eigen()
     # import pickle
     # with open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'crawler_temp.pickle'),'rb') as f:

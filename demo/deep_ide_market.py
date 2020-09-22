@@ -13,6 +13,20 @@ train_batchsize=0.0003,30,0.5,60,5e-04,20,0.1,32，总需1小时23分
 在OIM基础上，不改变任何参数，使用DataParallel在工作站双2080ti上跑，结果稍低：
 Rank-1:86.43% Rank-5:95.07% Rank-10:96.73% Rank-20:97.89% Rank-100:99.11%
 mAP:68.57，用时1小时30分钟
+我发现单纯地调大train_batchsize（128）并不会带来提升，反而会下降非常多（79%），
+该观察是否正确？或许还要改变其他训练参数，譬如增大num_epochs？
+使用带CBAM的resnet50，测试结果：
+Rank-1:87.05% Rank-5:95.31% Rank-10:97.03% Rank-20:98.31% Rank-100:99.61% 
+mAP:70.01
+毫无提升，用时1小时30分钟。我看知乎是建议直接使用SENet系列，并且是插入到BasicBlock
+中，这改变了resnet的基本块结构，导致无法加载预训练参数，所以就不尝试了
+标签平滑是一个非常有效的技巧，普通交叉熵损失结果（为了减少训练时间，我的num_epochs
+设得很小，用时38分钟，lr=0.00035,num_epochs=30）：
+Rank-1:81.12% Rank-5:92.37% Rank-10:94.80% Rank-20:96.79% Rank-100:99.08% 
+mAP:61.41
+使用平滑交叉熵损失，其他参数保持不变，结果：
+Rank-1:85.51% Rank-5:94.54% Rank-10:96.32% Rank-20:97.62% Rank-100:99.32% 
+mAP:68.72
 '''
 
 from initial import *
@@ -26,25 +40,27 @@ from deep.models.utils import CheckPoint
 import torch as pt
 import torch.nn as nn
 from deep.plot_match import plot_match
-from deep.loss import OIMLoss
+from deep.loss import OIMLoss,CrossEntropyLabelSmooth
+import deep.models.attention.CBAM as CBAM
 # from functools import partial
 
-if __name__=='__main__': #话说为什么这部分代码一定要放在__main__块中？好像是多线程的缘故
+if __name__=='__main__': #话说为什么这部分代码一定要放在__main__块中？好像是多进程加载数据DataLoader的缘故
+                         #且仅限于Windows，https://pytorch.apachecn.org/docs/1.2/data.html
     #可在此处设置os.environ['CUDA_VISIBLE_DEVICES']，如'0,1'
-    setup_seed(0) #尽管设置了种子，但是每次结果可能仍有稍许不同，大概零点几个百分点区别，如果去掉此行
-                  #，每次结果则会有很大不同，我可能哪里设置的不对？
+    setup_seed(0)
     dataset_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../images/Market-1501-v15.09.15/')
     checkpoint=CheckPoint()
-    checkpoint.load('ResNet50_Classify.tar') #允许随时中断训练进程
-
+    checkpoint.load('ResNet50_Classify.tar') #允许随时中断训练进程，但下面使用OIM损失时应尽量一气呵成，因为LUT属于
+                                             #模型外参数
     market1501=Market1501(dataset_dir)
     market1501.print_info()
     train_iter,query_iter,gallery_iter=load_dataset(market1501,32,32) #前一个32是训练批次大小，后面一个是测试批次大小，后一个无需修改
     
     num_classes=len(set(list(zip(*market1501.trainSet))[1])) #训练集的行人ID数量
-    net=ResNet50_Classify(num_classes,oim=True)
+    net=ResNet50_Classify(num_classes,oim=True,backbone=None) #backbone值可以替换成CBAM.resnet50()，带注意力的resnet50版本
 
-    # loss=nn.CrossEntropyLoss()
+    # loss=nn.CrossEntropyLoss() #普通分类交叉熵损失
+    # loss=CrossEntropyLabelSmooth(num_classes) #标签平滑损失
     loss=OIMLoss(2048,num_classes,scalar=30,momentum=0.5,device=None) #see in https://github.com/Cysu/open-reid/blob/master/examples/oim_loss.py
     # lr,num_epochs=0.00035,30
     lr,num_epochs=0.0003,60
@@ -60,9 +76,9 @@ if __name__=='__main__': #话说为什么这部分代码一定要放在__main__�
     #要在重新训练时恢复上次的学习率，像上面仅使用last_epoch是不起作用的，已解决：额外保存和重载optimizer.state_dict()和
     #scheduler.state_dict()，https://www.zhihu.com/question/67209417/answer/250909765
     
-    #train参数device可以是None，此时仅仅使用单卡训练，device设为'DP'，会使用全部多卡训练，也可以传递一个数字列表，使用指定的多个卡，
+    #train参数device可以是None，此时仅仅使用单卡训练（0号），device设为'DP'，会使用全部多卡训练，也可以传递一个数字列表，使用指定的多个卡，
     #但是要注意修改OIM的设备为列表第一项数值，device若设为数字，表示使用指定设备进行单卡训练，此时需要相应修改OIM的设备，取相同数值即可
-    train(net,train_iter,(loss,),optimizer,num_epochs,scheduler,checkpoint=checkpoint,device='DP') #即使你只想利用checkpoint做test，也必须先执行一下
+    train(net,train_iter,(loss,),optimizer,num_epochs,scheduler,checkpoint=checkpoint,device=None) #即使你只想利用checkpoint做test，也必须先执行一下
                                                                                        #train，由于epoch已达最大，所以实际并不会进行训练
                                                                                        #这仅仅是为了完成加载模型参数这一步骤。当然你也可以
                                                                                        #手动执行加载net.load_state_dict(...)

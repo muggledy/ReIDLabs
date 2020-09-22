@@ -136,6 +136,37 @@ class OIMLoss(nn.Module): #copy from https://github.com/Cysu/open-reid/issues/90
         return loss
         # return loss, inputs
 
+class CrossEntropyLabelSmooth(nn.Module):
+    """Cross entropy loss with label smoothing regularizer.
+    Reference:
+    Szegedy et al. Rethinking the Inception Architecture for Computer Vision. CVPR 2016.
+    Equation: y = (1 - epsilon) * y + epsilon / K.
+    Args:
+        num_classes (int): number of classes.
+        epsilon (float): weight.
+    comes form https://github.com/michuanhaohao/reid-strong-baseline/
+    """
+    def __init__(self, num_classes, epsilon=0.1):
+        super(CrossEntropyLabelSmooth, self).__init__()
+        self.num_classes = num_classes
+        self.epsilon = epsilon
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, inputs, targets):
+        """
+        Args:
+            inputs: prediction matrix (before softmax) with shape (batch_size, num_classes)
+            targets: ground truth labels with shape (num_classes)
+        """
+        log_probs = self.logsoftmax(inputs)
+        targets = pt.zeros(log_probs.size(),device=targets.device).scatter_(1, targets.unsqueeze(1), 1) #unsqueeze(1)
+        #类似于numpy中的ndarray[:,None]操作，都是将原本一维的向量转换成二维（增加一个维度，增加第二维，长度为1）
+        #同理，unsqueeze(0)和ndarray[None,:]一样，新增一个维度，且增加的是第一个维度，长度为1。scatter(dim,index,src)
+        #函数沿着dim维（此处dim=1，也就是横向）将第index个位置的元素置为src
+        targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
+        loss = (- targets * log_probs).mean(0).sum() #一般我们是先sum(单样本交叉熵损失)再mean(批量样本求均值)，不过都一样
+        return loss
+
 if __name__=='__main__':
     target=pt.Tensor([1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8])
     features=pt.Tensor(32,2048)

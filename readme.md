@@ -1,4 +1,4 @@
-Experiments on Windows about re-ID
+Experiments on Windows 10(and GeForce RTX 2070 SUPER) about re-ID
 
 # Requirements
 
