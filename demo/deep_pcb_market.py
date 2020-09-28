@@ -37,11 +37,12 @@ if __name__=='__main__':
         losses.append(nn.CrossEntropyLoss())
     lr,num_epochs=0.0003,60
     
+    # optimizer=pt.optim.Adam(net.parameters(),lr=lr,weight_decay=5e-04)
     optimizer=pt.optim.Adam([{
         'params':get_rest_params(net.base),'lr':lr*1,'name':'base'
     },{
         'params':get_rest_params(net,['base']),'lr':lr,'name':'ide'
     }],weight_decay=5e-04) #https://blog.csdn.net/qq_34914551/article/details/87699317
     scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=40,gamma=0.1)
-    train(net,train_iter,losses,optimizer,num_epochs,scheduler,checkpoint=checkpoint)
+    train(net,train_iter,losses,optimizer,num_epochs,scheduler,checkpoint=checkpoint,use_amp=True)
     test(net,query_iter,gallery_iter,eval_cmc_map)

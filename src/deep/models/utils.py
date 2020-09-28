@@ -99,11 +99,16 @@ def hard_sample_mining(dist,labels,return_inds=False):
     max_ap_v,max_ap_ind=pt.max(dist[mask_pos].contiguous().view(N,-1),dim=1)
     min_an_v,min_an_ind=pt.min(dist[mask_neg].contiguous().view(N,-1),dim=1)
     if return_inds:
-        _,y=pt.where(mask_pos==True)
+        # _,y=pt.where(mask_pos==True) #我降低了PyTorch版本为1.1.0报错：TypeError: where(): argument 'input' (position 2) must be Tensor, not bool
+        #已知的是1.3版本之后torch.where实现同numpy.where
+        y=(mask_pos==True).nonzero()[:,1] #替代方案：https://blog.csdn.net/judgechen1997/article/details/105820709
+
         x=pt.arange(N)
         y=y.contiguous().view(N,-1)
         ap_x,ap_y=x,y[x,max_ap_ind]
-        _,y=pt.where(mask_neg==True)
+        # _,y=pt.where(mask_neg==True)
+        y=(mask_neg==True).nonzero()[:,1]
+
         y=y.contiguous().view(N,-1)
         an_x,an_y=x,y[x,min_an_ind]
         return max_ap_v,min_an_v,(ap_x,ap_y),(an_x,an_y) #Note that 

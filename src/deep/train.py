@@ -18,13 +18,16 @@ def setup_seed(seed):
     cudnn.deterministic=True
 
 @measure_time
-def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,**kwargs):
+def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,use_amp=False,**kwargs):
     '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]，即序列形式。总体损失loss
        =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...
        device的值可以是：str('cpu' or 'cuda'),scalar(0, index of GPU),list([0,1], indexes list 
        of GPU),None(优先使用GPU),torch.device,对于list，表示多卡训练，特别的，可以取值'DP'，表示
        使用全部GPU设备并行'''
-    DP_flag=False #Data Parallel
+    if use_amp:
+        print('Use AMP(Automatic Mixed Precision)')
+        from apex import amp
+    DP_flag=False #Data Parallel Flag
     if device is None:
         device=pt.device('cuda') if pt.cuda.is_available() else pt.device('cpu') #此时如果存在GPU，优先使用GPU。注意
                                     #当使用'cuda'作为运行设备时，与使用'cuda:X'（torch.cuda.current_device()）是一致的
@@ -52,9 +55,17 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         pass
     else:
         raise ValueError('Invalid device!')
+
+    net=net.to(device)
+    if use_amp: #参考：https://blog.csdn.net/qq_34914551/article/details/103203862
+                #https://blog.csdn.net/ccbrid/article/details/103207676
+                #https://nvidia.github.io/apex/amp.html
+        net, optimizer = amp.initialize(net, optimizer, opt_level=kwargs.get('amp_level',"O1"))
+        #训练伊始，会出现：Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 32768.0
+        #https://github.com/NVIDIA/apex/issues/635
     
     if checkpoint is not None and checkpoint.loaded:
-        net.load_state_dict(checkpoint.states_info_etc['state'])
+        net.load_state_dict(checkpoint.states_info_etc['state']) #注意从本地加载的模型参数其device属性是cuda，所以在此之前net必须先to(cuda)
         start_epoch=checkpoint.states_info_etc['epoch']+1
         optimizer.load_state_dict(checkpoint.states_info_etc['optimizer']) #必须配合保存重载optimizer，scheduler才起作用
         for state in optimizer.state.values(): #https://blog.csdn.net/weixin_41848012/article/details/105675735
@@ -63,23 +74,25 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                     state[k] = v.to(device)
         if checkpoint.states_info_etc.get('scheduler'):
             scheduler.load_state_dict(checkpoint.states_info_etc['scheduler'])
+        if use_amp: #注意是在amp.initialize之后加载本地参数
+            amp.load_state_dict(checkpoint.states_info_etc['amp'])
+
+        checkpoint.states_info_etc=None #在训练MGN模型时，采用PK采样（用于三元组损失），P=8，K=4，事实上此时显存占用已达60%-70%（8G），
+        #当我暂停训练，并从checkpoint继续时，得到一条错误：CUDA error: CUBLAS_STATUS_ALLOC_FAILED when calling `cublasCreate(handle)`
+        #隐约感到这是显存不够导致的，我降低了批次大小，令P=2，不再报错，于是定位到此处，在从checkpoint加载模型参数后，将checkpoint置为None
+        #（以释放空间）
+        checkpoint.loaded=False #与此同时，将loaded标志置为False，下次必须重新加载才行
     else:
         start_epoch=0
     # if scheduler is not None and isinstance(scheduler,partial):
     #     scheduler=scheduler(last_epoch=start_epoch-1)
     # if scheduler is not None:
     #     scheduler.step(start_epoch-1)
-    checkpoint.states_info_etc=None #在训练MGN模型时，采用PK采样（用于三元组损失），P=8，K=4，事实上此时显存占用已达60%-70%（8G），
-    #当我暂停训练，并从checkpoint继续时，得到一条错误：CUDA error: CUBLAS_STATUS_ALLOC_FAILED when calling `cublasCreate(handle)`
-    #隐约感到这是显存不够导致的，我降低了批次大小，令P=2，不再报错，于是定位到此处，在从checkpoint加载模型参数后，将checkpoint置为None
-    #（以释放空间）
-    checkpoint.loaded=False #与此同时，将loaded标志置为False，下次必须重新加载才行
 
-    net=net.to(device)
     if device.type=='cuda':
         cudnn.benchmark=True
         print('Set cudnn.benchmark %s'%(cudnn.benchmark))
-        if DP_flag:
+        if DP_flag: #注意DataParallel包裹放在一切就绪之后，即模型net已经放到GPU设备上、加载好参数、设置好APEX等等之后
             gpu_num=pt.cuda.device_count()
             print('Use Data Parallel to Wrap Model',end='')
             net=nn.DataParallel(net,device_ids=device_ids) #允许多卡训练，https://blog.csdn.net/zhjm07054115/article/details/104799661/
@@ -97,8 +110,8 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
             print('Running on device %s...'%device)
     else:
         print('Now training on %s(But GPU is proposed to accelerate)...'%device)
-    
-    net.train()
+
+    net.train() #这一段也可以放到DataParallel包裹之前，简化为：net.train();net.train_mode=True
     if isinstance(net,nn.DataParallel):
         net.module.train_mode=True
     else:
@@ -144,7 +157,11 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                 coeffis_lossesname_flag=False
             L=sum([coeffis[i]*l for i,l in enumerate(Llist)])
             optimizer.zero_grad()
-            L.backward()
+            if use_amp:
+                with amp.scale_loss(L, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                L.backward()
             optimizer.step()
             if batch_ind==0 or (batch_ind+1)%20==0 or batch_ind+1==all_batches_num:
                 opt_parms=optimizer.param_groups if scheduler is None else scheduler.optimizer.param_groups
@@ -156,8 +173,8 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         if scheduler is not None:
             scheduler.step()
         if checkpoint is not None:
-            checkpoint.save({'state':net.module.state_dict() if \
+            checkpoint.save({**{'state':net.module.state_dict() if \
                     isinstance(net,nn.DataParallel) else net.state_dict(),'epoch':epoch,
                     'optimizer':optimizer.state_dict(),
-                    'scheduler':None if scheduler is None else scheduler.state_dict()})
+                    'scheduler':None if scheduler is None else scheduler.state_dict()},**({'amp':amp.state_dict()} if use_amp else {})})
     print('Train OVER!')

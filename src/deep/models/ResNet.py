@@ -137,7 +137,7 @@ class ResNet50_PCB(nn.Module): #PCB's baseline, refer to
     def forward(self,X):
         X=self.base(X)
         if self.ks is None:
-            self.ks=seek_ks_3m(X.size(2),self.outsize)[:2] #此处X.size(2)为24，按照3m原则，计算会得到
+            self.ks=seek_ks_3m(X.size(2),self.outsize)[:2].tolist() #此处X.size(2)为24，按照3m原则，计算会得到
                                                            #核尺寸为4，步长也为4。水平池化后特征图为6x1
         X=HorizontalPool2d(*self.ks,pool_type='avg')(X)
         ret,fs=[],[]

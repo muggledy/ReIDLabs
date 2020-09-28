@@ -3,11 +3,11 @@ Experiments on Windows 10(and GeForce RTX 2070 SUPER) about re-ID
 # Requirements
 
 - python: 3.6
-- tensorflow-gpu: 2.0.0
-- keras: 2.3.1
 - CUDA: 10.0
 - cuDNN: 7.6.4
-- Pytorch: 1.2.0
+- tensorflow-gpu: 2.0.0
+- keras: 2.3.1
+- Pytorch: 1.5.0
 
 ### Environment Setting
 
@@ -38,6 +38,16 @@ trusted-host = https://pypi.tuna.tsinghua.edu.cn
 激活虚拟环境：`activate reid`
 
 导出环境配置：`conda env export -n reid > environment.yaml`
+
+安装APEX以使用混合精度计算（不得已降低了PyTorch版本：1.5.0->1.1.0，否则报错：AttributeError: module 'torch.distributed' has no attribute 'deprecated'）：
+
+```shell
+git clone https://github.com/ptrblck/apex.git
+cd apex
+python setup.py install
+```
+
+警告（暂时无法解决）Warning:  multi_tensor_applier fused unscale kernel is unavailable, possibly because apex was installed without --cuda_ext --cpp_ext. Using Python fallback.  Original ImportError was: ModuleNotFoundError("No module named 'amp_C'",)
 
 # Run
 
