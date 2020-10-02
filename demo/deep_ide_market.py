@@ -15,6 +15,10 @@ Rank-1:86.43% Rank-5:95.07% Rank-10:96.73% Rank-20:97.89% Rank-100:99.11%
 mAP:68.57，用时1小时30分钟
 我发现单纯地调大train_batchsize（128）并不会带来提升，反而会下降非常多（79%），
 该观察是否正确？或许还要改变其他训练参数，譬如增大num_epochs？
+“SGD 算法的 batch size 并不能无限制地增大。SGD 采用较大的 batch size 时，如果
+还是使用同样的 epochs 数量进行运算，则准确度往往低于 batch size 较小的场景；而且
+目前还不存在特定算法方案能够帮助我们高效利用较大的 batch size。”
+参见：https://blog.csdn.net/wydbyxr/article/details/84855489
 （实验3）使用带CBAM的resnet50，测试结果：
 Rank-1:87.05% Rank-5:95.31% Rank-10:97.03% Rank-20:98.31% Rank-100:99.61% 
 mAP:70.01

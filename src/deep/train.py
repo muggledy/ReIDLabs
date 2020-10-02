@@ -61,8 +61,10 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                 #https://blog.csdn.net/ccbrid/article/details/103207676
                 #https://nvidia.github.io/apex/amp.html
         net, optimizer = amp.initialize(net, optimizer, opt_level=kwargs.get('amp_level',"O1"))
-        #训练伊始，会出现：Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 32768.0
+        #训练伊始，有可能会出现：Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 32768.0
         #https://github.com/NVIDIA/apex/issues/635
+        #https://blog.csdn.net/zjc910997316/article/details/103559837
+        #https://zhuanlan.zhihu.com/p/79887894
     
     if checkpoint is not None and checkpoint.loaded:
         net.load_state_dict(checkpoint.states_info_etc['state']) #注意从本地加载的模型参数其device属性是cuda，所以在此之前net必须先to(cuda)
@@ -120,11 +122,13 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     all_batches_num=len(train_iter)
     losses_num=len(losses)
     losses_name=kwargs.get('losses_name')
+    give_loss_name=True
     if losses_name is None: #实际losses_name的长度应等于所有损失函数的输出数量的总和，这边只是先赋一个初值，后面可能
                             #还会进行修改，因为有些损失函数的输出不止一个，譬如
                             #AlignedReID的三元组损失有两个输出，这种情况下建议人为给出losses_name，主要是使调用者清
                             #楚，打印时出现的子损失个数大于losses参数长度时不要吃惊
         losses_name=['loss%d'%(i+1) for i in range(losses_num)]
+        give_loss_name=False
     if coeffis is None: #coeffis长度默认和losses_name保持一致，默认值全为1
         coeffis=[1]*len(losses_name)
     coeffis_lossesname_flag=True
@@ -166,7 +170,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
             if batch_ind==0 or (batch_ind+1)%20==0 or batch_ind+1==all_batches_num:
                 opt_parms=optimizer.param_groups if scheduler is None else scheduler.optimizer.param_groups
                 print('epoch=[%d/%d], batch=[%d/%d], %s, %s'%(epoch+1,epochs,batch_ind+1,all_batches_num, \
-                    'loss=%f'%L if nLlist==1 else ('loss(all)=%f, '%L)+ \
+                    ('loss=%f'%L if not give_loss_name else '%s=%f'%(losses_name[0],L)) if nLlist==1 else ('loss(all)=%f, '%L)+ \
                     (', '.join(['%s=%f'%(losses_name[i],Llist[i]) for i in range(nLlist)])), \
                     ', '.join(['lr(%s)=%s'%(e.get('name',i+1),'{:g}'.format(e['lr'])) for i,e in enumerate(opt_parms)]) \
                     if len(list(opt_parms))>1 else 'lr=%s'%('{:g}'.format(opt_parms[0]['lr']))))

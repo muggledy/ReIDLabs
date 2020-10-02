@@ -42,7 +42,7 @@ class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/d
 
 class ResNet50_Classify_Metric(nn.Module):
     '''对原始ResNet50_Classify的改造版，有少许不同，既适用ID损失，也适用度量损失（譬如三元组损失等度量学习方法），或者两者兼具'''
-    def __init__(self,num_ids,loss={'softmax','metric'}): #如果只使用metric，那么num_ids参数无需提供
+    def __init__(self,num_ids=None,loss={'softmax','metric'}): #如果只使用metric，那么num_ids参数无需提供
         super(ResNet50_Classify_Metric,self).__init__()
         self.train_mode=True
         self.loss=loss
@@ -52,6 +52,8 @@ class ResNet50_Classify_Metric(nn.Module):
             FlattenLayer(),
         )
         if 'softmax' in self.loss:
+            if num_ids==None:
+                raise ValueError('num_ids can\' be None for ID Loss!')
             self.classifier=nn.Linear(2048,num_ids)
 
     def forward(self,X):

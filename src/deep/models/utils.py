@@ -74,7 +74,7 @@ def euc_dist(X1,X2=None):
         D=A.t()
     else:
         D=pt.pow(X2,2).sum(dim=0,keepdim=True)
-    return (A+D-2*X1.t().mm(X1 if X2 is None else X2)).clamp(min=1e-12)
+    return (A+D-2*X1.t().mm(X1 if X2 is None else X2)).clamp(min=1e-12) #tensor.clamp(min)用于设置张量数据的下限，即小于min的全部置为min
 
 def euc_dist_pro(X1,X2=None):
     '''euc_dist的增强版，且兼容euc_dist，参见../../tools.py#euc_dist_pro'''

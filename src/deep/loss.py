@@ -10,27 +10,25 @@ class TripletHardLoss(nn.Module):
     '''难样本的三元组损失'''
     def __init__(self,margin):
         super(TripletHardLoss,self).__init__()
-        self.margin=margin
         self.ranking_loss=nn.MarginRankingLoss(margin=margin) #MarginRankingLoss(x1,x2,y)=max(-y*(x1-x2)+margin,0), y=1 or -1
                                                               #如果x1,x2,y不是标量，最后会求平均损失
                                                               #Note(Triplet Loss):loss(ap,an)=max(ap-an+margin,0), where ap is 
                                                               #the dist between anchor and positive and an dist between anchor 
                                                               #and negative
+                                                              #https://pytorch.org/docs/master/nn.html#distance-functions
 
     def forward(self,X,Y): #X's shape:(batch_size,dim)，这个批量的大小为PxK，P个不同行人，每个行人K张不同图像
                            #，具体的示例，设K=4，则第1到第4张图像是属于某一行人的四张不同图像，第5到第8张是属于
                            #另一行人的四张不同图像，等等。我们要做的就是从这个批量中挖掘困难样本的三元组。参数Y
                            #的作用仅仅是构建mask掩码（Y是批量数据X的标签值，此处也就是图像的pid），由于我们的批
                            #量是“有序”的（有序是指从前到后每k个图像属于同一行人），实际上Y也可以不需要，有则鲁棒
-        dist=euc_dist(X.t())
-        dist=dist.clamp(min=1e-12).sqrt() #tensor.clamp(min)用于设置张量数据的下限，即小于min的全部置为min，之后做sqrt是因为
-                                          #euc_dist返回的是欧氏距离的平方，其实也可以不做sqrt
+        dist=euc_dist(X.t()).sqrt() #做sqrt是因为euc_dist返回的是欧氏距离的平方，其实也可以不做sqrt
         n=X.size(0)
         mask=Y.expand(n,n).eq(Y.expand(n,n).t()) #mask作用以及困难样本挖掘请参见https://www.bilibili.com/video/BV1Pg4y1q7sN?p=36
         dist_ap,dist_an=[],[]
         for i in range(n):
             dist_ap.append(dist[i][mask[i]==True].max().unsqueeze(0)) #在相同行人中找最大距离作为正例困难样本对距离
-            dist_an.append(dist[i][mask[i]==False].min().unsqueeze(0)) ##在不同行人中找最小距离作为负例困难样本对距离
+            dist_an.append(dist[i][mask[i]==False].min().unsqueeze(0)) #在不同行人中找最小距离作为负例困难样本对距离
         dist_ap=pt.cat(dist_ap)
         dist_an=pt.cat(dist_an)
         return self.ranking_loss(dist_ap,dist_an,-pt.ones_like(dist_ap))
@@ -43,7 +41,6 @@ class AlignedTriLoss(nn.Module):
        部分支，论文实验表明如果各自为政，两分支分别挖掘难样本，会导致网络梯度更新困难'''
     def __init__(self,margin=0.3):
         super(AlignedTriLoss,self).__init__()
-        self.margin=margin
         self.ranking_loss_g=nn.MarginRankingLoss(margin=margin)
         self.ranking_loss_l=nn.MarginRankingLoss(margin=margin)
 
@@ -165,6 +162,64 @@ class CrossEntropyLabelSmooth(nn.Module):
         #函数沿着dim维（此处dim=1，也就是横向）将第index个位置的元素置为src
         targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
         loss = (- targets * log_probs).mean(0).sum() #一般我们是先sum(单样本交叉熵损失)再mean(批量样本求均值)，不过都一样
+        return loss
+
+class MSMLoss(nn.Module):
+    '''边界挖掘损失（失败）'''
+    def __init__(self,margin):
+        super(MSMLoss,self).__init__()
+        self.margin=margin
+        self.ranking_loss=nn.MarginRankingLoss(margin=margin)
+
+    # def forward(self,X,Y): #X是PK采样获得的，同TripletHardLoss
+    #                        #该损失似乎无法正常工作，精度非常非常低（rank-1最差只有1%），我代码明明和罗浩提供的keras简易
+    #                        #版本是一样的啊：
+    #                        #https://github.com/michuanhaohao/keras_reid/blob/7bc111887fb8c82b68ed301c75c3e06a0e39bc1a/reid_tripletcls.py
+    #                        #https://blog.csdn.net/qq_21190081/article/details/78467394
+    #                        #我认为是由于“一整个batch只选出一对正样本对和一对负样本对，剩下的全都不管”导致结果变低，因此调低batch_size为1，但是
+    #                        #问题依旧，还是会陷于极差的局部解，其他如lr、margin等参数修改也不起作用
+    #     dist=euc_dist(X.t()).sqrt()
+    #     n=X.size(0)
+    #     mask=Y.expand(n,n).eq(Y.expand(n,n).t()) #注意此处mask中元素要么为0要么为1
+    #     dist_pp=pt.max(dist[mask.to(pt.bool)]).unsqueeze(0)
+    #     dist_nn=pt.min(dist[(mask==0).to(pt.bool)]).unsqueeze(0)
+    #     return self.ranking_loss(dist_pp,dist_nn,-pt.ones_like(dist_pp)) #损失无法下降得比0.3（margin）更小，这是否意味着优化只能使正例样本对间
+    #                                                                      #距和负例样本对间距一致？而不能使正样本对间距小于负样本对间距，参见：
+    #                                                                      #https://github.com/michuanhaohao/keras_reid/issues/1
+    #                                                                      #为何会出现这种情况？
+
+    def forward(self,X,Y): #我还结合了TriHard和MSML（直接相加），观察训练是否有所提升，没有，3%，这个MSML写得究竟有什么问题？！
+        # dist=euc_dist(X.t()).sqrt()
+        n=X.size(0)
+        # dist[range(n),range(n)]=0.0 #混合精度计算会产生较大误差，特别是对角线应该全0才是，但这样直接赋值会导致梯度反向传播计算中断
+
+        dist = pt.pow(X, 2).sum(dim=1, keepdim=True).expand(n, n)
+        dist = dist + dist.t()
+        dist.addmm_(1, -2, X, X.t())
+        dist = dist.clamp(min=1e-12).sqrt() #the same as func euc_dist
+
+        mask=Y.expand(n,n).eq(Y.expand(n,n).t())
+
+        max_ind=pt.argmax(dist[mask.to(pt.bool)])
+        max_row,max_col=(mask==1).nonzero()[max_ind]
+        dist_pp=dist[mask.to(pt.bool)][max_ind].unsqueeze(0) #the hardest positive samples in PK batch
+
+        dist_ppn1=dist[max_row][mask[max_row]==0].min().unsqueeze(0) #显式引入“相对距离”，这样损失才能降至0，如果MSML真有效，那这个会更好
+        dist_ppn2=dist[:,max_col][mask[:,max_col]==0].min().unsqueeze(0)
+
+        min_ind=pt.argmin(dist[(mask==0).to(pt.bool)])
+        min_row,min_col=(mask==0).nonzero()[min_ind]
+        dist_nn=dist[(mask==0).to(pt.bool)][min_ind].unsqueeze(0) #the hardest negative samples in PK batch
+
+        dist_npp1=dist[min_row][mask[min_row]==1].max().unsqueeze(0)
+        dist_npp2=dist[:,min_col][mask[:,min_col]==1].max().unsqueeze(0)
+
+        loss=pt.max(dist_pp-dist_ppn1+self.margin,pt.zeros_like(dist_pp))+ \
+            pt.max(dist_pp-dist_nn+self.margin,pt.zeros_like(dist_pp))+ \
+            pt.max(dist_npp1-dist_nn+self.margin,pt.zeros_like(dist_npp1))
+        # ap=pt.cat([dist_pp,dist_pp,dist_pp,dist_npp1,dist_npp2])
+        # an=pt.cat([dist_ppn1,dist_ppn2,dist_nn,dist_nn,dist_nn])
+        # loss=self.ranking_loss(ap,an,-pt.ones_like(ap))
         return loss
 
 if __name__=='__main__':
