@@ -31,6 +31,7 @@ import torch as pt
 import torch.nn as nn
 from functools import partial
 from zoo.plot import plot_dataset
+from deep.loss import CrossEntropyLabelSmooth
 
 if __name__=='__main__':
     setup_seed(0)
@@ -46,9 +47,11 @@ if __name__=='__main__':
     train_iter,query_iter,gallery_iter=load_dataset(market1501,32,32,sampler=sampler, \
         train_transforms=default_train_transforms,test_transforms=default_test_transforms)
 
-    net=ResNet50_MGN(len(set(list(zip(*market1501.trainSet))[1])))
+    num_classes=len(set(list(zip(*market1501.trainSet))[1]))
+    net=ResNet50_MGN(num_classes)
 
     softmax_loss=nn.CrossEntropyLoss()
+    # softmax_loss=CrossEntropyLabelSmooth(num_classes) #LSR Loss，没有带来提升，反而降低了0.2%
     triplet_loss=TripletHardLoss(margin=0.3)
 
     losses=(triplet_loss,triplet_loss,triplet_loss,softmax_loss,softmax_loss,softmax_loss, \
@@ -59,10 +62,10 @@ if __name__=='__main__':
     scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=60,gamma=0.1)
 
     train(net,train_iter,losses,optimizer,num_epochs,scheduler,checkpoint=checkpoint, \
-        coeffis=None) #coeffis设为None，表示所有子损失融合权重都为1
+        coeffis=None,use_amp=False) #coeffis设为None，表示所有子损失融合权重都为1
 
     save_gal_path=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/market1501_resnetMGN_gallery.mat')
-    re_calc_gal_fea=False #如果（每当）模型重新训练了，要记得置为True，之后可以再改回False节省时间
+    re_calc_gal_fea=True #如果（每当）模型重新训练了，要记得置为True，之后可以再改回False节省时间
     test(net,query_iter,save_gal_path if not re_calc_gal_fea and os.path.exists(save_gal_path) \
         else gallery_iter,eval_cmc_map,save_galFea=save_gal_path,re_rank=False)
 

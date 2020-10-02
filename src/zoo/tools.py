@@ -780,6 +780,20 @@ def get_proxy_kusidaili(base_url='https://www.kuaidaili.com/free/inha/',pages=20
         pickle.dump(tdicts,f)
     return tdicts
 
+def gauss_blur(img,sigma): #doing gaussian blur with two-direction 1-D kernel filter
+    def get_gauss_kernel(sigma,dim=2):
+        ksize=int(np.floor(sigma*6)/2)*2+1
+        k_1D=np.arange(ksize)-ksize//2
+        k_1D=np.exp(-k_1D**2/(2*sigma**2))
+        k_1D=k_1D/np.sum(k_1D)
+        if dim==1:
+            return k_1D
+        elif dim==2:
+            return k_1D[:,None].dot(k_1D.reshape(1,-1))
+    row_filter=get_gauss_kernel(sigma,1)
+    t=cv2.filter2D(img,-1,row_filter[...,None])
+    return cv2.filter2D(t,-1,row_filter.reshape(1,-1))
+
 if __name__=='__main__':
     url='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBZ204d3BjSVhDanNnNHRuV2VyWDNxWk9BM0JBcUE=.jpg'
     # url='http://ting6.yymp3.net:82/new10/gaojin/12.mp3'

@@ -204,7 +204,7 @@ class MSMLoss(nn.Module):
         max_row,max_col=(mask==1).nonzero()[max_ind]
         dist_pp=dist[mask.to(pt.bool)][max_ind].unsqueeze(0) #the hardest positive samples in PK batch
 
-        dist_ppn1=dist[max_row][mask[max_row]==0].min().unsqueeze(0) #显式引入“相对距离”，这样损失才能降至0，如果MSML真有效，那这个会更好
+        dist_ppn1=dist[max_row][mask[max_row]==0].min().unsqueeze(0) #显式引入“相对距离”，如果MSML真有效，那这个理应会更好
         dist_ppn2=dist[:,max_col][mask[:,max_col]==0].min().unsqueeze(0)
 
         min_ind=pt.argmin(dist[(mask==0).to(pt.bool)])
@@ -214,12 +214,16 @@ class MSMLoss(nn.Module):
         dist_npp1=dist[min_row][mask[min_row]==1].max().unsqueeze(0)
         dist_npp2=dist[:,min_col][mask[:,min_col]==1].max().unsqueeze(0)
 
-        loss=pt.max(dist_pp-dist_ppn1+self.margin,pt.zeros_like(dist_pp))+ \
-            pt.max(dist_pp-dist_nn+self.margin,pt.zeros_like(dist_pp))+ \
-            pt.max(dist_npp1-dist_nn+self.margin,pt.zeros_like(dist_npp1))
+        # loss=(pt.max(dist_pp-dist_ppn1+self.margin,pt.zeros_like(dist_pp))+ \
+        #     pt.max(dist_pp-dist_nn+self.margin,pt.zeros_like(dist_pp))+ \
+        #     pt.max(dist_npp1-dist_nn+self.margin,pt.zeros_like(dist_npp1)))/3
+        # loss=pt.max(dist_pp-dist_nn+self.margin,pt.zeros_like(dist_pp))
+        ap=pt.cat([dist_pp,dist_pp,dist_npp1])
+        an=pt.cat([dist_ppn1,dist_nn,dist_nn])
+
         # ap=pt.cat([dist_pp,dist_pp,dist_pp,dist_npp1,dist_npp2])
         # an=pt.cat([dist_ppn1,dist_ppn2,dist_nn,dist_nn,dist_nn])
-        # loss=self.ranking_loss(ap,an,-pt.ones_like(ap))
+        loss=self.ranking_loss(ap,an,-pt.ones_like(ap))
         return loss
 
 if __name__=='__main__':

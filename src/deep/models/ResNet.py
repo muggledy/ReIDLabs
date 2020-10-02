@@ -14,7 +14,7 @@ class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/d
     '''最简单的基于ResNet50的分类网络，适用ID损失，目前还可以用于使用OIM损失，也可以传递其他主干网backbone，譬如CBAM中
        定义的resnet50，否则使用标准resnet50，参数c_out是backbone去除最后分类层的输出节点数，譬如resnet50对应2048维，
        resnet56则对应64维'''
-    def __init__(self,num_ids,oim=False,backbone=None,c_out=2048): #当使用OIM损失时，置oim为True
+    def __init__(self,num_ids,oim=False,backbone=None,c_out=2048): #当使用OIM损失时，置oim为True。c_out参数针对不同backbone是固定的
         super(ResNet50_Classify,self).__init__()
         self.train_mode=True #所有重识别网络模型都要有该参数
         self.oim=oim
@@ -41,20 +41,36 @@ class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/d
             return f
 
 class ResNet50_Classify_Metric(nn.Module):
-    '''对原始ResNet50_Classify的改造版，有少许不同，既适用ID损失，也适用度量损失（譬如三元组损失等度量学习方法），或者两者兼具'''
-    def __init__(self,num_ids=None,loss={'softmax','metric'}): #如果只使用metric，那么num_ids参数无需提供
+    '''对原始ResNet50_Classify的改造版，有少许不同，可以单独使用ID损失或单独使用度量损失，再或者两个损失结合，
+       也只有在此时，可以选择使用BNNeck网络结构（出自：
+       2019 CVPR Bag of Tricks and A Strong Baseline for Deep Person Re-identification）'''
+    def __init__(self,num_ids=None,loss={'softmax','metric'},BNNeck=False): #如果只使用metric，那么num_ids参数无需提供
         super(ResNet50_Classify_Metric,self).__init__()
         self.train_mode=True
         self.loss=loss
+        self.BNNeck=BNNeck
         resnet50=torchvision.models.resnet50(pretrained=True)
+
+        #修改stride为1
+        layer4_1=Bottleneck(1024,512,downsample=nn.Sequential(nn.Conv2d(1024,2048,1,1,bias=False),nn.BatchNorm2d(2048)))
+        pretrained_layer4_1_state=resnet50.layer4[0].state_dict()
+        delete_keys=['conv2.weight','downsample.1.weight']
+        layer4_1.state_dict().update({k:v for k,v in pretrained_layer4_1_state.items() if k not in delete_keys})
+        resnet50.layer4[0]=layer4_1
+
         self.base=nn.Sequential(
             *(list(resnet50.children())[:-1]),
-            FlattenLayer(),
-        )
+            FlattenLayer()
+        ) #base网络输出用于度量损失，使用欧式距离度量，后接BN归一化层，将特征分布到超球面上，
+          #适用余弦距离度量，再使用分类损失，这就是BNNeck模型结构，简单高效
         if 'softmax' in self.loss:
             if num_ids==None:
                 raise ValueError('num_ids can\' be None for ID Loss!')
-            self.classifier=nn.Linear(2048,num_ids)
+            if 'metric' in self.loss and self.BNNeck:
+                print('use BNNeck')
+                self.bn=nn.BatchNorm1d(2048)
+            self.classifier=nn.Linear(2048,num_ids,bias=False if self.loss=={'softmax','metric'} and self.BNNeck else True)
+            # nn.init.kaiming_normal_(self.classifier.weight,mode='fan_out')
 
     def forward(self,X):
         f=self.base(X)
@@ -64,8 +80,12 @@ class ResNet50_Classify_Metric(nn.Module):
             elif self.loss=={'metric'}:
                 return f
             elif self.loss=={'softmax','metric'}:
+                if self.BNNeck:
+                    return self.classifier(self.bn(f)),f
                 return self.classifier(f),f
         else:
+            if self.loss=={'softmax','metric'} and self.BNNeck:
+                return self.bn(f)
             return f
 
 class ResNet50_Aligned(nn.Module):
@@ -80,7 +100,9 @@ class ResNet50_Aligned(nn.Module):
                                    ↓
                                   gf1 (N,K)
                                <id loss>
-       '''
+       Update[2020.10.6]: Introduce BNNeck into AlignedReID, it works well. If you 
+       want to roll back to the previous version, delete "self.bn_1"
+    '''
     def __init__(self,num_ids):
         super(ResNet50_Aligned,self).__init__()
         self.train_mode=True
@@ -90,9 +112,11 @@ class ResNet50_Aligned(nn.Module):
         self.bn=nn.BatchNorm2d(2048) #第一个参数是batchnorm层输入（batch_size,channel,h,w）的通道数channel(2048)
         self.conv1x1=nn.Conv2d(2048,128,kernel_size=1,stride=1,padding=0,bias=True) #可选，加上主要是为了降低特征图
                                                                                     #通道数，加速训练（上图并未标注）
-        self.classifier=nn.Linear(2048,num_ids)
+        self.classifier=nn.Linear(2048,num_ids,bias=False) #引入BNNeck，此时最后的分类层不使用偏置
                                      #卷积尺寸计算：⌊ (H-K_h+2P_h)/S_h + 1 ⌋ and ⌊ (W-K_w+2P_w)/S_w + 1 ⌋
                                      #where K is kernel(K_h,K_w) and P is padding(P_h,P_w) and S is stride(S_h,S_w)
+        self.bn_1=nn.BatchNorm1d(2048) #同BNNeck，放在分类层前
+
     def forward(self,X):
         f=self.base(X)
         gf=nn.AvgPool2d((f.size()[-2:]))(f) #全局分支，全局平均池化，输出(batch_size,channel,1,1)
@@ -101,11 +125,12 @@ class ResNet50_Aligned(nn.Module):
         local_stream=nn.Sequential(self.bn,nn.ReLU(),HorizontalPool2d(pool_type='max'),self.conv1x1)
         norm=lambda X: X / pt.pow(X,2).sum(dim=1, keepdim=True).clamp(min=1e-12).sqrt()
         if self.train_mode:
-            gf1=self.classifier(gf) #全局分支的另一个分叉，后接softmax分类损失
+            gf1=self.classifier(self.bn_1(gf)) #全局分支的另一个分叉，后接softmax分类损失
             lf=local_stream(f).squeeze() #局部分支，后接TriHard损失（不同于全局分支，局部分支上的距离矩阵根据DMLI求解）
             lf = norm(lf) #重要！否则出现nan
             return gf1,(gf,lf) #输出形状分别为(batch_size,num_ids), (batch_size,2048), (batch_size,128,h)
         else:
+            gf=self.bn_1(gf)
             if self.aligned:
                 lf=norm(local_stream(f).squeeze())
                 return gf,lf
@@ -117,7 +142,7 @@ class ResNet50_PCB(nn.Module): #PCB's baseline, refer to
         super(ResNet50_PCB,self).__init__()
         self.train_mode=True
         resnet50=torchvision.models.resnet50(pretrained=True) #this is an extremely long dream, dream of parallel world
-        layer4_1=Bottleneck(1024,512,downsample=nn.Sequential(nn.Conv2d(1024,2048,1,bias=False),nn.BatchNorm2d(2048))) #
+        layer4_1=Bottleneck(1024,512,downsample=nn.Sequential(nn.Conv2d(1024,2048,1,1,bias=False),nn.BatchNorm2d(2048))) #
                                                            #https://blog.csdn.net/qq_34108714/article/details/90169562
         pretrained_layer4_1_state=resnet50.layer4[0].state_dict()
         delete_keys=['conv2.weight','downsample.1.weight'] #这两层更改了，所以预训练的参数无法起作用
@@ -136,6 +161,11 @@ class ResNet50_PCB(nn.Module): #PCB's baseline, refer to
             setattr(self,'classifier_%d'%i,nn.Linear(256,num_ids))
             self.classifiers.append(getattr(self,'classifier_%d'%i))
 
+        self.conv1x1s=nn.ModuleList(self.conv1x1s) #如果不将列表转换为nn.ModuleList对象，在使用双卡时会引发错误RuntimeError: 
+        self.classifiers=nn.ModuleList(self.classifiers) #Expected tensor for argument #1 'input' to have the same device 
+        #as tensor for argument #2 'weight'; but device 1 does not equal 0 (while checking arguments for cudnn_convolution)
+        #引发错误的位置为[*]，参考：https://blog.csdn.net/guyejiyou64/article/details/102500675
+
     def forward(self,X):
         X=self.base(X)
         if self.ks is None:
@@ -144,10 +174,10 @@ class ResNet50_PCB(nn.Module): #PCB's baseline, refer to
         X=HorizontalPool2d(*self.ks,pool_type='avg')(X)
         ret,fs=[],[]
         for i in range(self.outsize):
-            fs.append(self.conv1x1s[i](X[...,[i],:]).squeeze())
+            fs.append(self.conv1x1s[i](X[...,[i],:]).squeeze()) #[*]
         if self.train_mode:
             for i in range(self.outsize):
-                ret.append(self.classifiers[i](fs[i])) #每个水平条后接一个1x1的卷积+全连接层
+                ret.append(self.classifiers[i](fs[i])) #每个水平条后接一个1x1的卷积+全连接层。[*]
             return ret #用以接6个softmax损失
         else:
             return pt.cat(fs,dim=1)
@@ -302,4 +332,5 @@ class ResNet56_Classify(ResNet50_Classify): #使用在CIFRA10上预训练的resn
         super(ResNet56_Classify,self).__init__(num_ids,oim,ResNet56.resnet56(pretrained=pretrained),64)
 
 if __name__=='__main__':
-    net=ResNet56_Classify(751)
+    net=ResNet50_PCB(751)
+    print(net)

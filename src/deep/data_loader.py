@@ -5,7 +5,7 @@ import torchvision.transforms as T
 import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
-from deep.transform import RandomErasing
+from deep.transform import RandomErasing,Lighting
 
 def read_image(img_path):
     if not os.path.exists(img_path):
@@ -44,7 +44,7 @@ class testDataset(Dataset): #用于构造测试图像数据集，测试图像没
         img=read_image(self.dataset[index])
         if self.transform is not None:
             img=self.transform(img)
-        return (img,) #原来差个括号啊，该死
+        return (img,)
 
 default_train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(),RandomErasing(), \
     T.ToTensor(),T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]

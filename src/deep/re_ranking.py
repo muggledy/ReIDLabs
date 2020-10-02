@@ -33,7 +33,7 @@ def re_ranking(q_g_dist, q_q_dist, g_g_dist, k1=20, k2=6, lambda_value=0.3):
 
     # The following naming, e.g. gallery_num, is different from outer scope.
     # Don't care about it.
-
+    print('Re-Ranking with k-reciprocal Encoding...')
     original_dist = np.concatenate(
       [np.concatenate([q_q_dist, q_g_dist], axis=1),
        np.concatenate([q_g_dist.T, g_g_dist], axis=1)],

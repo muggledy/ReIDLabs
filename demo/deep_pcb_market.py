@@ -11,7 +11,8 @@ Rank-1:89.34% Rank-5:96.32% Rank-10:97.74% Rank-20:98.69% Rank-100:99.44%
 mAP:74.06
 耗时1.03小时
 虽然我还没有实践证明，但从他人经验中得知，太大的batch_size配以SGD效果很可能变差，
-但是辅以二阶优化法如L-BFGS等可能会发挥大batch_size的优势
+但是辅以二阶优化法如L-BFGS等可能会发挥大batch_size的优势。不过二阶优化方法也并不
+受推荐：https://blog.csdn.net/qq_23269761/article/details/80901411
 '''
 
 from initial import *

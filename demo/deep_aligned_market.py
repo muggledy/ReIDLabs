@@ -10,6 +10,7 @@ mAP:88.07
 最主要的提升是mAP，但rank5,10,20都降低了一个点
 用时：1.48小时
 参考作者源码：https://github.com/michuanhaohao/AlignedReID
+注意，由于分类损失难以下降，目前我修改了模型，参考BNNeck，在分类层前面加了个BN层
 '''
 
 from initial import *
@@ -55,4 +56,4 @@ if __name__=='__main__':
         gallery_iter,eval_cmc_map,
         # calc_dist_funcs=[cosine_dist_T,calc_dist_DMLI], #aligned
         # calc_dist_funcs=euc_dist_T, #test result: rank-1 88.75% by euc_dist but 89.37% by cosine dist
-        save_galFea=save_dir,re_rank=True)
+        save_galFea=save_dir,re_rank=False)
