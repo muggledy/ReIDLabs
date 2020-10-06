@@ -1,16 +1,19 @@
 '''
-Rank-1:89.37% Rank-5:96.35% Rank-10:97.65% Rank-20:98.60% Rank-100:99.61%
-mAP:74.99
+Rank-1:89.01% Rank-5:96.64% Rank-10:97.71% Rank-20:98.60% Rank-100:99.52%
+mAP:74.48，用时：1.48小时
 参数设置：margin=0.3, num_instances=4, lr=0.0002, num_epochs=200, 
 batch_size=32, weight_decay=5e-04, step_size=150, gamma=0.1（测试仅使用了全
 局特征，且没有使用任何tricks。理论上使用局部特征测试效果会更好，但我测试时却降低了？）
 做了重排后，结果为：
-Rank-1:91.21% Rank-5:95.46% Rank-10:96.44% Rank-20:97.60% Rank-100:99.32%
-mAP:88.07
-最主要的提升是mAP，但rank5,10,20都降低了一个点
-用时：1.48小时
+Rank-1:92.13% Rank-5:95.78% Rank-10:96.91% Rank-20:98.04% Rank-100:99.47%
+mAP:88.32
 参考作者源码：https://github.com/michuanhaohao/AlignedReID
-注意，由于分类损失难以下降，目前我修改了模型，参考BNNeck，在分类层前面加了个BN层
+注意，由于分类损失难以下降，目前我已修改了模型，参考BNNeck，在分类层前面加了个BN
+层，训练参数俱保持不变，结果：
+Rank-1:89.96% Rank-5:96.23% Rank-10:97.65% Rank-20:98.43% Rank-100:99.70%
+mAP:75.04，也没啥变化，但重排后mAP提升较大：
+Rank-1:92.55% Rank-5:95.93% Rank-10:97.06% Rank-20:97.95% Rank-100:99.64%
+mAP:90.20
 '''
 
 from initial import *

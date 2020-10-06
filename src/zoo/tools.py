@@ -20,7 +20,7 @@ import traceback
 import pickle
 import shutil
 from lxml import etree
-from collections import defaultdict
+from collections import defaultdict,OrderedDict
 
 def euc_dist(X,Y=None):
     '''calc euclidean distance of X(d*m) and Y(d*n), func return 
@@ -793,6 +793,24 @@ def gauss_blur(img,sigma): #doing gaussian blur with two-direction 1-D kernel fi
     row_filter=get_gauss_kernel(sigma,1)
     t=cv2.filter2D(img,-1,row_filter[...,None])
     return cv2.filter2D(t,-1,row_filter.reshape(1,-1))
+
+class LRU(OrderedDict):
+    'Limit size, evicting the least recently looked-up key when full'
+    
+    def __init__(self, maxsize=128, *args, **kwds):
+        self.maxsize = maxsize
+        super().__init__(*args, **kwds)
+
+    def __getitem__(self, key):
+        value = super().__getitem__(key)
+        self.move_to_end(key)
+        return value
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if len(self) > self.maxsize:
+            oldest = next(iter(self))
+            del self[oldest]
 
 if __name__=='__main__':
     url='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBZ204d3BjSVhDanNnNHRuV2VyWDNxWk9BM0JBcUE=.jpg'

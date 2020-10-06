@@ -67,7 +67,7 @@ class ResNet50_Classify_Metric(nn.Module):
             if num_ids==None:
                 raise ValueError('num_ids can\' be None for ID Loss!')
             if 'metric' in self.loss and self.BNNeck:
-                print('use BNNeck')
+                print('use BNNeck in the model')
                 self.bn=nn.BatchNorm1d(2048)
             self.classifier=nn.Linear(2048,num_ids,bias=False if self.loss=={'softmax','metric'} and self.BNNeck else True)
             # nn.init.kaiming_normal_(self.classifier.weight,mode='fan_out')

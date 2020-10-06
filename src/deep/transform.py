@@ -8,6 +8,8 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import gauss_blur
 
+#https://github.com/michuanhaohao/keras_reid/blob/7bc111887fb8c82b68ed301c75c3e06a0e39bc1a/aug.py（不过这个增强也不太行啊）
+
 class RandomErasing(object): #comes from 
     #https://github.com/KaiyangZhou/deep-person-reid/blob/master/torchreid/data/transforms.py
     """Randomly erases an image patch.
@@ -65,11 +67,14 @@ class RandomErasing(object): #comes from
         return Image.fromarray(np.rollaxis(img,0,3))
 
 class Lighting:
-    '''Lighting with Retinex'''
-    def __init__(self,**kwargs):
+    '''Lighting with Retinex（毫无卵用，还降低了5、6个点）'''
+    def __init__(self,probability=0.5,**kwargs):
+        self.probability=probability
         self.kwargs=kwargs
 
     def __call__(self,img):
+        if random.uniform(0, 1) > self.probability:
+            return img
         img=np.array(img)
         return Image.fromarray(self.retinex_gimp(img,**self.kwargs))
     
@@ -112,11 +117,10 @@ if __name__=='__main__':
     import matplotlib.pyplot as plt
     plt.subplot(121)
     plt.imshow(img)
-    # img=Lighting()(img)
+    img=Lighting()(img)
     import torchvision.transforms as T
     img=T.RandomHorizontalFlip()(img)
     img=RandomErasing()(img)
-    # img=Lighting()(img)
     plt.subplot(122)
     plt.imshow(img)
     plt.show()

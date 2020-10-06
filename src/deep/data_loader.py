@@ -1,11 +1,11 @@
 from PIL import Image
-import os.path
+import os
 from torch.utils.data import Dataset,DataLoader
 import torchvision.transforms as T
-import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
-from deep.transform import RandomErasing,Lighting
+from deep.transform import RandomErasing
+# from zoo.tools import LRU
 
 def read_image(img_path):
     if not os.path.exists(img_path):
@@ -51,6 +51,10 @@ default_train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(),RandomEra
 default_test_transforms=[T.Resize((256,128)),T.ToTensor(), \
     T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
 
+#DataLoader可能是速度瓶颈，参考：https://www.zhihu.com/question/356829360/answer/907832358
+#https://github.com/NVIDIA/apex/issues/304
+#https://zhuanlan.zhihu.com/p/80695364，prefetch_generator和data_prefetcher实测都没速度提升啊
+
 def load_dataset(dataset,train_batch_size=None,test_batch_size=None,train_transforms=None, \
                  test_transforms=None,sampler=None,num_workers=None,notrain=False):
     '''dataset是类似Market1501那样的对象，或者说必须具有相同格式的trainSet,querySet和gallerySet属性。传递
@@ -63,6 +67,8 @@ def load_dataset(dataset,train_batch_size=None,test_batch_size=None,train_transf
     if test_transforms is None:
         test_transforms=default_test_transforms
     
+    #话说pin_memory究竟有什么用？
+    #https://stackoverflow.com/questions/55563376/pytorch-how-does-pin-memory-works-in-dataloader
     if num_workers is None:
         num_workers=4
     if not notrain:

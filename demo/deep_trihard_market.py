@@ -35,21 +35,21 @@ mAP:4.09
 250个epoch，rank-1才不过17%：
 Rank-1:17.87% Rank-5:42.22% Rank-10:55.11% Rank-20:67.07% Rank-100:88.95% 
 mAP:8.02
-越大的batch_size，结果越差，譬如我使用32(batch_size)是越训越差（50个epoch就降至
-3%），这也
+越大的batch_size，结果越差，譬如我使用32(batch_size)是越训越差（50个epoch就降
+至3%），这也
 容易理解，因为每次只会从整个批次中挑选出一个三元组对，剩下的就都不管（至少我认为
 其作用有限），batch_size越大，每一epoch实际参与训练的样本越少，导致训练陷于一个
 极差的局部解
-可惜作者始终没有公布源码，为什么他论文中批次大小设为128也能正常工作？是不是得要训
-上千个epoch？在market1501上能达到85%？疑惑
-（实验3）实验1同时使用三元组损失和分类损失，但由于两者分别关注不同的度量空间（欧式
-距离和余弦距离），因此在实验1的基础上，引入BNNeck，其他保持不变，原本两个损失并不
-能协调，三元组损失快速下降时分类损失几乎纹丝不动，BNNeck得加入使两个损失能同时很
-快下降，并很快收敛（且不到80个epoch就能达到86%/rank-1以及69/mAP）：
+可惜作者始终没有公布源码，为什么他论文中批次大小设为128也能正常工作？是不是得要
+训上千个epoch？在market1501上能达到85%？疑惑
+（实验3）实验1同时使用三元组损失和分类损失，但由于两者分别关注不同的度量空间（欧
+式距离和余弦距离），因此在实验1的基础上，引入BNNeck，其他保持不变，原本两个损失
+并不能协调，三元组损失快速下降时分类损失几乎纹丝不动，BNNeck得加入使两个损失能同
+时很快下降，并很快收敛（且不到80个epoch就能达到86%/rank-1以及69/mAP）：
 Rank-1:87.53% Rank-5:95.75% Rank-10:97.57% Rank-20:98.52% Rank-100:99.55% 
 mAP:70.71
-按照BNNeck论文，上面是对分类层使用了kaiming初始化的结果，如果使用默认的初始化方式
-（uniform均匀初始化），结果反而会提升更多：
+按照BNNeck论文，上面是对分类层使用了kaiming初始化的结果，如果使用默认的初始化方
+式（uniform均匀初始化），结果反而会提升更多：
 Rank-1:89.70% Rank-5:96.47% Rank-10:97.89% Rank-20:98.63% Rank-100:99.61% 
 mAP:74.63
 再将resent50最后一层下采样步长设为1，结果：
@@ -59,7 +59,8 @@ mAP:76.32，耗时58min
 
 from initial import *
 from deep.data_manager import Market1501
-from deep.data_loader import load_dataset
+from deep.data_loader import load_dataset, \
+    default_train_transforms
 from deep.models.ResNet import ResNet50_Classify_Metric,\
     ResNet50_Classify,ResNet56_Classify
 from deep.sampler import RandomIdSampler,RandomIdSampler2
@@ -73,6 +74,7 @@ import torch as pt
 import torch.nn as nn
 from deep.plot_match import plot_match
 from deep.lr_scheduler import WarmupMultiStepLR
+from deep.transform import Lighting
 
 if __name__=='__main__':
     setup_seed(0)
@@ -103,8 +105,10 @@ if __name__=='__main__':
         statistics=True) #如果不想使用num_paddings扩充，直接置为None即可
     market1501=Market1501(dataset_dir)
     market1501.print_info()
-    train_iter,query_iter,gallery_iter \
-        =load_dataset(market1501,64,32,sampler=sampler) #注意batch_size必须是num_instances的整数倍
+
+    # default_train_transforms.insert(1,Lighting())
+    train_iter,query_iter,gallery_iter=load_dataset(market1501,64,32,sampler=sampler, \
+        train_transforms=default_train_transforms) #注意batch_size必须是num_instances的整数倍
     
     net=ResNet50_Classify_Metric(len(set(list(zip(*market1501.trainSet))[1])),loss=used_losses, \
         BNNeck=True)

@@ -226,6 +226,15 @@ class MSMLoss(nn.Module):
         loss=self.ranking_loss(ap,an,-pt.ones_like(ap))
         return loss
 
+#RingLoss: RingLoss将所有特征向量限制到半径为R的超球上，同时能够保持凸性，用于辅助Softmax损失以获得更稳健的特征
+#https://github.com/Paralysis/ringloss
+#https://github.com/michuanhaohao/deep-person-reid/blob/master/losses.py
+#和一般的损失如分类损失、三元组损失不一样，这些损失不带参数，而RingLoss携带参数，需要添加到optimizer优化器中
+
+#CenterLoss: CenterLoss用于辅助三元组损失，以获得更加紧凑的聚类表征，也就是更小的类内距离，同类样本更加相似
+#https://github.com/KaiyangZhou/pytorch-center-loss
+#和RingLoss一样，损失中含有待优化的参数
+
 if __name__=='__main__':
     target=pt.Tensor([1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8])
     features=pt.Tensor(32,2048)
