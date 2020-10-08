@@ -269,6 +269,20 @@ def logsumexp_2d(tensor): #used for CBAM(attention)
     outputs = s + (tensor_flatten - s).exp().sum(dim=2, keepdim=True).log()
     return outputs
 
+def get_device(device):
+    if isinstance(device, str):
+        if device == 'GPU':
+            device=pt.device('cuda')
+        elif device == 'CPU':
+            device=pt.device('cpu')
+    elif isinstance(device, pt.device):
+        pass
+    elif device == None:
+        device=pt.device('cuda' if pt.cuda.is_available() else 'cpu')
+    elif isinstance(device,int): #单卡时，要确保数据是放在指定设备上，多卡时（DP），要确保是在“主设备”上
+        device=pt.device('cuda',device)
+    return device
+
 if __name__ == "__main__":
     # k,s=seek_ks_3m(24,6)[:2]
     # print(k,s)

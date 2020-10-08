@@ -55,6 +55,16 @@ mAP:74.63
 再将resent50最后一层下采样步长设为1，结果：
 Rank-1:90.23% Rank-5:97.18% Rank-10:98.22% Rank-20:99.05% Rank-100:99.64% 
 mAP:76.32，耗时58min
+在实验3基础上，修改原始的困难三元组损失，使用softplus函数ln(1+exp(·))代替hinge
+函数[m+·]+，即“软margin”，其他一切保持不变，结果：
+Rank-1:90.97% Rank-5:97.03% Rank-10:98.16% Rank-20:98.87% Rank-100:99.70% 
+mAP:78.75
+同样在实验3基础上，在原始难三元组损失中引入“绝对距离”，测试结果：
+Rank-1:91.54% Rank-5:96.91% Rank-10:98.01% Rank-20:98.78% Rank-100:99.61% 
+mAP:79.21
+同时引入“软margin”和“绝对距离”，效果不好，不如单独引入“绝对距离”，结果：
+Rank-1:91.18% Rank-5:96.79% Rank-10:98.28% Rank-20:99.02% Rank-100:99.64% 
+mAP:78.84
 '''
 
 from initial import *
@@ -93,7 +103,7 @@ if __name__=='__main__':
         losses_name.append('idLoss')
         cpflag+='C'
     if 'metric' in used_losses:
-        mloss=TripletHardLoss(margin)
+        mloss=TripletHardLoss(margin,mode='norm')
         losses.append(mloss)
         losses_name.append('triHardLoss')
         cpflag+='M'

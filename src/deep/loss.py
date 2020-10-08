@@ -2,15 +2,20 @@ import torch as pt
 import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
-from deep.models.utils import euc_dist,hard_sample_mining,dist_DMLI
+from deep.models.utils import euc_dist,hard_sample_mining,dist_DMLI,get_device
 import torch.nn.functional as F
 from torch import nn, autograd
 
 class TripletHardLoss(nn.Module):
     '''难样本的三元组损失'''
-    def __init__(self,margin):
+    def __init__(self,margin=None,mode='norm'): #两个改进：'softplus'和'applus'，只有在使用softplus模式时，无需margin参数
         super(TripletHardLoss,self).__init__()
-        self.ranking_loss=nn.MarginRankingLoss(margin=margin) #MarginRankingLoss(x1,x2,y)=max(-y*(x1-x2)+margin,0), y=1 or -1
+        self.mode=mode
+        if self.mode in ['norm','applus']:
+            if margin is None:
+                raise ValueError('margin must not be None!')
+            self.margin=margin
+            # self.ranking_loss=nn.MarginRankingLoss(margin=margin) #MarginRankingLoss(x1,x2,y)=max(-y*(x1-x2)+margin,0), y=1 or -1
                                                               #如果x1,x2,y不是标量，最后会求平均损失
                                                               #Note(Triplet Loss):loss(ap,an)=max(ap-an+margin,0), where ap is 
                                                               #the dist between anchor and positive and an dist between anchor 
@@ -31,7 +36,13 @@ class TripletHardLoss(nn.Module):
             dist_an.append(dist[i][mask[i]==False].min().unsqueeze(0)) #在不同行人中找最小距离作为负例困难样本对距离
         dist_ap=pt.cat(dist_ap)
         dist_an=pt.cat(dist_an)
-        return self.ranking_loss(dist_ap,dist_an,-pt.ones_like(dist_ap))
+        if self.mode=='norm': #标准（难）三元组损失
+            return pt.max(dist_ap-dist_an+self.margin,pt.zeros_like(dist_ap)).mean() #一样的结果：self.ranking_loss(dist_ap,dist_an,-pt.ones_like(dist_ap))
+        elif self.mode=='softplus': #软margin版本，标准三元组为硬margin
+            return pt.log(1+pt.exp(dist_ap-dist_an)).mean()
+        elif self.mode=='applus': #三元组损失关注相对距离，为此引入绝对距离
+            return (pt.max(dist_ap-dist_an+self.margin,pt.zeros_like(dist_ap))+dist_ap).mean()
+        # return (pt.log(1+pt.exp(dist_ap-dist_an))+dist_ap).mean() #同时引入“绝对距离”和软margin，但是效果还不如两个单独的改进
         #反向传播：在计算得到距离矩阵后，事实上，矩阵中的每一个元素都是一个节点，前后节点有连边，并且沿着连边进行反向传播，
         #通过挖掘困难样本，即在距离矩阵中挑选一些节点最后计算损失，显然损失本身也是一个节点而且是最后一个节点，它和之前所有
         #挑选出的距离节点相连，最终反向传播将只会更新这些和损失节点存在连边的距离节点
@@ -106,17 +117,7 @@ class OIMLoss(nn.Module): #copy from https://github.com/Cysu/open-reid/issues/90
         self.reduction = reduction
 
         z = pt.zeros(num_classes, num_features)
-        if isinstance(device, str):
-            if device == 'GPU':
-                device=pt.device('cuda')
-            elif device == 'CPU':
-                device=pt.device('cpu')
-        elif isinstance(device, pt.device):
-            pass
-        elif device == None:
-            device=pt.device('cuda' if pt.cuda.is_available() else 'cpu')
-        elif isinstance(device,int): #单卡时，要确保数据是放在指定设备上，多卡时（DP），要确保是在“主设备”上
-            device=pt.device('cuda',device)
+        device=get_device(device)
 
         self.register_buffer('lut', z.to(device))
 
@@ -226,14 +227,79 @@ class MSMLoss(nn.Module):
         loss=self.ranking_loss(ap,an,-pt.ones_like(ap))
         return loss
 
-#RingLoss: RingLoss将所有特征向量限制到半径为R的超球上，同时能够保持凸性，用于辅助Softmax损失以获得更稳健的特征
-#https://github.com/Paralysis/ringloss
-#https://github.com/michuanhaohao/deep-person-reid/blob/master/losses.py
-#和一般的损失如分类损失、三元组损失不一样，这些损失不带参数，而RingLoss携带参数，需要添加到optimizer优化器中
+'''
+RingLoss: RingLoss将所有特征向量限制到半径为R的超球上，同时能保持凸性，用于辅助Softmax损失以获得更稳健的特征
+References:
+[1] https://github.com/Paralysis/ringloss
+[2] https://github.com/michuanhaohao/deep-person-reid/blob/master/losses.py
+注：和一般的损失如分类损失、三元组损失不一样，这些损失不带参数，而RingLoss携带参数，需要添加到optimizer优化器中
+示例见deep_test_ringloss.py
+'''
+class RingLoss(nn.Module):
+    """Ring loss.
+    
+    Reference:
+    Zheng et al. Ring loss: Convex Feature Normalization for Face Recognition. CVPR 2018.
+    """
+    def __init__(self, device=None):
+        super(RingLoss, self).__init__()
+        self.radius = nn.Parameter(pt.ones(1, dtype=pt.float).to(get_device(device)))
 
-#CenterLoss: CenterLoss用于辅助三元组损失，以获得更加紧凑的聚类表征，也就是更小的类内距离，同类样本更加相似
-#https://github.com/KaiyangZhou/pytorch-center-loss
-#和RingLoss一样，损失中含有待优化的参数
+    def forward(self, x, y): #一般损失接受两个输入，特征和对应的标签，标签是作为监督信息的，但是此处RingLoss是一个例外，
+                             #RingLoss只接受特征输入，但是为了兼容已有训练代码（train.py），额外添加一个参数y，但是不使用
+        l = ((x.norm(p=2, dim=1) - self.radius)**2).mean()
+        return l
+
+'''
+CenterLoss: CenterLoss用于辅助三元组损失，以获得更加紧凑的聚类表征，也就是更小的类内距离，同类样本更加相似
+当然，也可以用来辅助分类损失
+References:
+[1] https://github.com/KaiyangZhou/pytorch-center-loss
+注：和RingLoss一样，损失中含有待优化的参数，示例见deep_test_centerloss.py
+'''
+
+class CenterLoss(nn.Module):
+    """Center loss.
+    
+    Reference:
+    Wen et al. A Discriminative Feature Learning Approach for Deep Face Recognition. ECCV 2016.
+    
+    Args:
+        num_classes (int): number of classes.
+        feat_dim (int): feature dimension.
+    """
+    def __init__(self, num_classes, feat_dim, device=None):
+        super(CenterLoss, self).__init__()
+        self.num_classes = num_classes
+        self.feat_dim = feat_dim
+        self.device=get_device(device)
+        self.centers = nn.Parameter(pt.randn(self.num_classes, self.feat_dim).to(self.device))
+
+    def forward(self, x, labels):
+        """
+        Args:
+            x: feature matrix with shape (batch_size, feat_dim).
+            labels: ground truth labels with shape (num_classes).
+        """
+        batch_size = x.size(0)
+        distmat = pt.pow(x, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
+                  pt.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
+        distmat.addmm_(1, -2, x, self.centers.t())
+
+        classes = pt.arange(self.num_classes).long().to(self.device)
+
+        labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
+        mask = labels.eq(classes.expand(batch_size, self.num_classes))
+
+        dist = []
+        for i in range(batch_size):
+            value = distmat[i][mask[i]]
+            value = value.clamp(min=1e-12, max=1e+12) # for numerical stability
+            dist.append(value)
+        dist = pt.cat(dist)
+        loss = dist.mean()
+
+        return loss
 
 if __name__=='__main__':
     target=pt.Tensor([1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8])

@@ -50,7 +50,7 @@ if __name__=='__main__':
     scheduler=pt.optim.lr_scheduler.StepLR(optimizer,step_size=150,gamma=0.1)
     
     train(net,train_iter,losses,optimizer,num_epochs,scheduler,checkpoint=checkpoint, \
-        losses_name=['softmaxLoss','globTriHardLoss','localTriHardLoss'],coeffis=None)
+        losses_name=['softmaxLoss','globTriHardLoss','localTriHardLoss'],coeffis=None)#,out_loss_map=[[(0,),(0,)],[(1,),(1,)]])
     
     save_dir=os.path.join(os.path.dirname(os.path.realpath(__file__)),'../data/market1501_resnetAligned_gallery.mat')
     re_calc_gal_fea=True
