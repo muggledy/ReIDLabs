@@ -168,11 +168,12 @@ def dist_DMLI(X,Y):
         D=shortest_dist(np.rollaxis(stripe_dist_mat,0,3)).reshape(-1)
     return D
 
-def calc_dist_DMLI(X,Y,desc=('query','gallery')):
+def calc_dist_DMLI(X,Y,desc=('query','gallery'),if_print=True):
     '''return a dist matrix(m,n) between X(m,·,·) and Y(n,·,·), about (,·,·), see dist_DMLI'''
-    print('Calc DMLI distance between %s%s and %s%s:'%(desc[0],str(tuple(X.shape)) if \
-        isinstance(X,pt.Tensor) else str(X.shape), \
-        desc[1],str(tuple(Y.shape)) if isinstance(Y,pt.Tensor) else str(Y.shape)))
+    if if_print:
+        print('Calc DMLI distance between %s%s and %s%s:'%(desc[0],str(tuple(X.shape)) if \
+            isinstance(X,pt.Tensor) else str(X.shape), \
+            desc[1],str(tuple(Y.shape)) if isinstance(Y,pt.Tensor) else str(Y.shape)))
     if isinstance(X,pt.Tensor):
         dist=pt.zeros(X.shape[0],Y.shape[0])
     elif isinstance(X,np.ndarray):

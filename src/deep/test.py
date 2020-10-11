@@ -3,20 +3,23 @@ import torch.nn as nn
 import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
-from zoo.tools import measure_time,print_cmc,cosine_dist,euc_dist
+from zoo.tools import measure_time,print_cmc,cosine_dist,euc_dist,print_if_visual
 from deep.re_ranking import re_ranking
 from deep.data_loader import testDataset
 from torch.utils.data import DataLoader
 import numpy as np
 import scipy.io as scio
 from itertools import count
+from functools import partial
 
-def cosine_dist_T(X,Y,desc=('query','gallery')):
-    print('Calc cosine distance between %s%s and %s%s'%(desc[0],str(X.shape),desc[1],str(Y.shape)))
+def cosine_dist_T(X,Y,desc=('query','gallery'),if_print=True):
+    if if_print:
+        print('Calc cosine distance between %s%s and %s%s'%(desc[0],str(X.shape),desc[1],str(Y.shape)))
     return cosine_dist(X.T,Y.T)
 
-def euc_dist_T(X,Y,desc=('query','gallery')):
-    print('Calc euclidean distance between %s%s and %s%s'%(desc[0],str(X.shape),desc[1],str(Y.shape)))
+def euc_dist_T(X,Y,desc=('query','gallery'),if_print=True):
+    if if_print:
+        print('Calc euclidean distance between %s%s and %s%s'%(desc[0],str(X.shape),desc[1],str(Y.shape)))
     return euc_dist(X.T,Y.T)
 
 def extract_feats(net,data_iter,device=None,**kwargs):
@@ -31,11 +34,10 @@ def extract_feats(net,data_iter,device=None,**kwargs):
     device=pt.device('cuda' if pt.cuda.is_available() else 'cpu') if device is None else device
     net=net.to(device)
     net.eval()
-    # if isinstance(net,nn.DataParallel): #同test函数
-    #     net.module.train_mode=False
-    # else:
-    #     net.train_mode=False
-    net.train_mode=False
+    if isinstance(net,nn.DataParallel): #同test函数
+        net.module.train_mode=False
+    else:
+        net.train_mode=False
 
     feats=[]
     with pt.no_grad():
@@ -48,19 +50,24 @@ def extract_feats(net,data_iter,device=None,**kwargs):
     print('Extracted features%s successfully'%str(feats.shape))
     return feats.T
 
-@measure_time
+# @measure_time
 def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],device=None,save_galFea=None, \
-         calc_dist_funcs=None,alphas=None,re_rank=False):
+         calc_dist_funcs=None,alphas=None,re_rank=False,return_top_rank=False,if_print=True):
     '''如果gallery_iter不是DataLoader对象，而是普通路径字符串，表示gallery特征将从文件加载。
        如果save_galFea不是None而是路径字符串，则会保存经过网络提取的gallery特征至该路径'''
     device=pt.device('cuda' if pt.cuda.is_available() else 'cpu') if device is None else device
+    printv=partial(print_if_visual,visual=if_print)
+
     net=net.to(device)
     net.eval()
-    # if isinstance(net,nn.DataParallel): #当时只是为了防止出错，其实目前这里的模型不可能是DataParallel类型
-    #     net.module.train_mode=False     #而且在测试阶段也没必要做DataParallel
-    # else:
-    #     net.train_mode=False
-    net.train_mode=False
+    # net.train_mode=False
+    if isinstance(net,nn.DataParallel): #我在train函数中调用了test函数，此时net可能是DataParallel对象
+        net.module.train_mode=False
+    else:
+        net.train_mode=False
+
+    if return_top_rank and evaluate is None:
+        raise ValueError('Must give evaluate creation if want return top rank!')
 
     with pt.no_grad():
         q_feas,q_pids,q_cids=[],[],[]
@@ -78,7 +85,7 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
             q_feas=pt.cat(q_feas,0).numpy()
         elif isinstance(q_feas[0],(list,tuple)):
             q_feas=[pt.cat(i,0).numpy() for i in zip(*q_feas)]
-        print("Extracted deep features%s for query set"%('[%s]'%(','.join([str(i.shape) for i in q_feas])) \
+        printv("Extracted deep features%s for query set"%('[%s]'%(','.join([str(i.shape) for i in q_feas])) \
             if isinstance(q_feas,list) else str(q_feas.shape)))
         q_pids=pt.cat(q_pids).numpy()
         q_cids=pt.cat(q_cids).numpy()
@@ -97,7 +104,7 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
                 g_feas=data['g_feas']
             g_pids=data['g_pids'].reshape(-1) #注意保存的(n,)一维数组读取后会变成(1,n)二维数组，可能导致错误
             g_cids=data['g_cids'].reshape(-1)
-            print('Loaded gallery features%s from %s'%('[%s]'%(','.join([str(i.shape) for i in g_feas])) \
+            printv('Loaded gallery features%s from %s'%('[%s]'%(','.join([str(i.shape) for i in g_feas])) \
                 if isinstance(g_feas,list) else str(g_feas.shape),gallery_iter))
         else:
             g_feas,g_pids,g_cids=[],[],[]
@@ -115,13 +122,13 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
                 g_feas=pt.cat(g_feas,0).numpy()
             elif isinstance(g_feas[0],(list,tuple)):
                 g_feas=[pt.cat(i,0).numpy() for i in zip(*g_feas)]
-            print("Extracted deep features%s for gallery set"%('[%s]'%(','.join([str(i.shape) for i in g_feas])) \
+            printv("Extracted deep features%s for gallery set"%('[%s]'%(','.join([str(i.shape) for i in g_feas])) \
                 if isinstance(g_feas,list) else str(g_feas.shape)))
             g_pids=pt.cat(g_pids).numpy()
             g_cids=pt.cat(g_cids).numpy()
             if save_galFea is not None:
                 save_galFea=os.path.normpath(save_galFea)
-                print('Save gallery features into %s'%save_galFea)
+                printv('Save gallery features into %s'%save_galFea)
                 if isinstance(g_feas,np.ndarray):
                     d={'g_feas':g_feas,'g_pids':g_pids,'g_cids':g_cids}
                 elif isinstance(g_feas,list):
@@ -141,7 +148,7 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
     if isinstance(g_feas,np.ndarray):
         g_feas=[g_feas]
     if calc_dist_funcs is None: #需要注意的是，距离计算函数的输入对象形状必须是(sample_num,...)
-        print('Using default dist evaluation function: cosine%s'%('(all)' if len(q_feas)>1 else ''))
+        printv('Using default dist evaluation function: cosine%s'%('(all)' if len(q_feas)>1 else ''))
         calc_dist_funcs=[cosine_dist_T for i in range(len(q_feas))]
     else:
         if not isinstance(calc_dist_funcs,(list,tuple)):
@@ -150,7 +157,7 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
             raise ValueError('Invalid calc_dist_funcs, it\'s length must be %d'%len(q_feas))
     if alphas is None:
         if len(q_feas)>1:
-            print('Using default fusion coefficient: 1(all)')
+            printv('Using default fusion coefficient: 1(all)')
         alphas=[1]*len(q_feas)
     else:
         if not isinstance(alphas,(list,tuple)):
@@ -160,27 +167,29 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
     distmat=0
     all_dists=[]
     if len(q_feas)!=len(g_feas):
-        print('WARNING: the number of features type of query(%d) is different from gallery(%d), check it, it may cause error!' \
+        printv('WARNING: the number of features type of query(%d) is different from gallery(%d), check it, it may cause error!' \
             %(len(q_feas),len(g_feas)))
     for i,(qf,gf) in enumerate(zip(q_feas,g_feas)):
-        sub_dist=calc_dist_funcs[i](qf,gf)
+        sub_dist=calc_dist_funcs[i](qf,gf,if_print=if_print)
         if re_rank:
-            sub_dist=re_ranking(sub_dist,calc_dist_funcs[i](qf,qf,('query','query')), \
-                calc_dist_funcs[i](gf,gf,('gallery','gallery')))
+            sub_dist=re_ranking(sub_dist,calc_dist_funcs[i](qf,qf,('query','query'),if_print=if_print), \
+                calc_dist_funcs[i](gf,gf,('gallery','gallery'),if_print=if_print))
         distmat+=(alphas[i]*sub_dist)
         all_dists.append(sub_dist)
 
     if evaluate is not None:
         if len(all_dists)>1:
             for i,sub_dist in enumerate(all_dists):
-                print('Calc CMC and mAP with sub dist matrix %d:'%i)
+                printv('Calc CMC and mAP with sub dist matrix %d:'%i)
                 cmc,mAP=evaluate(sub_dist.T,q_pids,g_pids,q_cids,g_cids,max(ranks))
                 print_cmc(cmc,color=False)
-                print('mAP:%.2f'%(mAP*100))
-        print("Computing CMC and mAP%s..."%('(fusion result)' if len(all_dists)>1 is not None else ''))
+                printv('mAP:%.2f'%(mAP*100))
+        printv("Computing CMC and mAP%s..."%('(fusion result)' if len(all_dists)>1 is not None else ''))
         cmc,mAP=evaluate(distmat.T,q_pids,g_pids,q_cids,g_cids,max(ranks))
+        if return_top_rank:
+            return cmc[0],mAP
         print_cmc(cmc,color=True)
-        print('mAP:%.2f'%(mAP*100))
+        printv('mAP:%.2f'%(mAP*100))
     y=np.argsort(distmat)
     # x=broadcast_to(np.arange(distmat.shape[0])[:,None],distmat.shape)
     # match_id=np.broadcast_to(g_pids,distmat.shape)[x,y] #每一行代表一个query的匹配结果，元素为匹配行人的id，不过这个没啥用

@@ -812,6 +812,10 @@ class LRU(OrderedDict):
             oldest = next(iter(self))
             del self[oldest]
 
+def print_if_visual(*args,visual=True,**kwargs):
+    if visual:
+        print(*args,**kwargs)
+
 if __name__=='__main__':
     url='https://onedrive.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBZ204d3BjSVhDanNnNHRuV2VyWDNxWk9BM0JBcUE=.jpg'
     # url='http://ting6.yymp3.net:82/new10/gaojin/12.mp3'

@@ -8,8 +8,6 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import gauss_blur
 
-#https://github.com/michuanhaohao/keras_reid/blob/7bc111887fb8c82b68ed301c75c3e06a0e39bc1a/aug.py（不过这个增强也不太行啊）
-
 class RandomErasing(object): #comes from 
     #https://github.com/KaiyangZhou/deep-person-reid/blob/master/torchreid/data/transforms.py
     """Randomly erases an image patch.
@@ -66,8 +64,86 @@ class RandomErasing(object): #comes from
                 return Image.fromarray(np.rollaxis(img,0,3))
         return Image.fromarray(np.rollaxis(img,0,3))
 
+#随机擦除可以提升模型的抗遮挡能力，且与随机裁剪、随机水平翻转具有一定的互补性
+#由于reid数据及来自不同场景下的摄像头，因光照变化以及摄像头参数设置等原因，数据集中的图片难免存在
+#着由于场景变化过大而难以识别的图片，针对这类情况，可以对数据集做色彩抖动处理，在扩充数据集的同时，
+#让模型适应复杂场景带来的变化。色彩抖动指的是随机改变图片的亮度、对比度和饱和度，色彩抖动通过调整这
+#三个不同的指标，模拟不同的光照变化，扩充更多背景亮度差异比较明显的图片
+
+class ColorJitter:
+    '''https://github.com/michuanhaohao/keras_reid/blob/7bc111887fb8c82b68ed301c75c3e06a0e39bc1a/aug.py
+       测试似乎并未带来提升，反而降低了1个点左右？
+    '''
+
+    def __init__(self, probability=0.5, brightness=0.4, contrast=0.4, saturation=0.4):
+        self.probability=probability
+        self.brightness=brightness
+        self.contrast=contrast
+        self.saturation=saturation
+
+    def __call__(self,img):
+        if random.uniform(0, 1) > self.probability:
+            return img
+        img=np.array(img)
+        rng = np.random.RandomState()
+        img=self._augment(img, rng, self.brightness, self.contrast, self.saturation)
+        return Image.fromarray(np.uint8(img))
+
+    @staticmethod
+    def _augment(img, rng, brightness, contrast, saturation):
+        def grayscale(img):
+            w = np.array([0.114, 0.587, 0.299]).reshape(1, 1, 3)
+            gs = np.zeros(img.shape[:2])
+            gs = (img * w).sum(axis=2, keepdims=True)
+            return gs
+        
+        def brightness_aug(img, val):
+            alpha = 1. + val * (rng.rand() * 2 - 1)
+            img = img * alpha
+            return img
+        def contrast_aug(img, val):
+            gs = grayscale(img)
+            gs[:] = gs.mean()
+            alpha = 1. + val * (rng.rand() * 2 - 1)
+            img = img * alpha + gs * (1 - alpha)
+            return img
+        def saturation_aug(img, val):
+            gs = grayscale(img)
+            alpha = 1. + val * (rng.rand() * 2 - 1)
+            img = img * alpha + gs * (1 - alpha)
+            return img
+        
+        def color_jitter(img, brightness, contrast, saturation):
+            augs = [(brightness_aug, brightness),
+                    (contrast_aug, contrast),
+                    (saturation_aug, saturation)]
+            rng.shuffle(augs)
+            for aug, val in augs:
+                img = aug(img, val)
+            return img
+        
+        def lighting(img, std):
+            eigval = np.array([0.2175, 0.0188, 0.0045])
+            eigvec = np.array([
+                [-0.5836, -0.6948,  0.4203],
+                [-0.5808, -0.0045, -0.8140],
+                [-0.5675, 0.7192, 0.4009],
+            ])
+            if std == 0:
+                return img
+            alpha = rng.randn(3) * std
+            bgr = eigvec * alpha.reshape(1, 3) * eigval.reshape(1, 3)
+            bgr = bgr.sum(axis=1).reshape(1, 1, 3)
+            img = img + bgr
+            return img
+
+        img = color_jitter(img, brightness=brightness, contrast=contrast, saturation=saturation)
+        # img = lighting(img, 0.1)
+        img = np.minimum(255.0, np.maximum(0, img))
+        return img#.astype('float32') #return h*w*3
+
 class Lighting:
-    '''Lighting with Retinex（毫无卵用，还降低了5、6个点）'''
+    '''Lighting with Retinex（完全失败，降低了5、6个点）'''
     def __init__(self,probability=0.5,**kwargs):
         self.probability=probability
         self.kwargs=kwargs
@@ -117,10 +193,13 @@ if __name__=='__main__':
     import matplotlib.pyplot as plt
     plt.subplot(121)
     plt.imshow(img)
-    img=Lighting()(img)
+    # img=Lighting()(img)
+    img=ColorJitter()(img)
     import torchvision.transforms as T
     img=T.RandomHorizontalFlip()(img)
     img=RandomErasing()(img)
     plt.subplot(122)
     plt.imshow(img)
     plt.show()
+    #一个很莫名其妙的警告：libpng warning: iCCP: cHRM chunk does not match sRGB
+    #竟然是由QQ输入法引起的？关闭就没有警告了，what fuck

@@ -8,6 +8,9 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
 from zoo.tools import measure_time
 import time
+from visdom import Visdom
+from deep.test import test
+from tensorboardX import SummaryWriter
 # from functools import partial
 
 def setup_seed(seed):
@@ -18,13 +21,27 @@ def setup_seed(seed):
     random.seed(seed)
     cudnn.deterministic=True
 
+#可视化：https://zhuanlan.zhihu.com/p/220403674
+
 @measure_time
-def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,use_amp=False,**kwargs):
+def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,use_amp=False, \
+          amp_level='O1',losses_name=None,out_loss_map=None,if_visdom=False,if_tensorboard=False,tensorboard_subdir=None,**kwargs):
     '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]，即序列形式。总体损失loss
        =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...
        device的值可以是：str('cpu' or 'cuda'),scalar(0, index of GPU),list([0,1], indexes list 
        of GPU),None(优先使用GPU),torch.device,对于list，表示多卡训练，特别的，可以取值'DP'，表示
        使用全部GPU设备并行'''
+    if if_tensorboard:
+        log_dir=os.path.normpath(os.path.join(os.path.dirname(__file__),'../../data/tensorboard_logdir/', \
+            '' if tensorboard_subdir is None else tensorboard_subdir))
+        print('Startup tensorboard, please execute "python -m tensorboard.main --logdir=%s"!'%log_dir)
+        print('' if net.train_mode==True else 'WARN: To plot model in tensorboard, net.train_mode should be True!\n',end='')
+        with SummaryWriter(log_dir=log_dir) as writer:
+            writer.add_graph(net,iter(train_iter).__next__()[0]) #需确保模型train_mode属性为True，否则在测试模式下，模型可能缺少一些组件，譬如分类层
+    #运行：cd到event事件保存路径下，python -m tensorboard.main --logdir=./ 或者python -m tensorboard.main --logdir=具体的路径
+    #切记不要给路径添加引号，否则显示空。https://blog.csdn.net/qq_23142123/article/details/80519535
+    #https://blog.csdn.net/Aa545620073/article/details/89374112
+
     if use_amp:
         print('Use AMP(Automatic Mixed Precision)')
         from apex import amp
@@ -61,7 +78,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     if use_amp: #参考：https://blog.csdn.net/qq_34914551/article/details/103203862
                 #https://blog.csdn.net/ccbrid/article/details/103207676
                 #https://nvidia.github.io/apex/amp.html
-        net, optimizer = amp.initialize(net, optimizer, opt_level=kwargs.get('amp_level',"O1"))
+        net, optimizer = amp.initialize(net, optimizer, opt_level=amp_level)
         #训练伊始，有可能会出现：Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 32768.0
         #https://github.com/NVIDIA/apex/issues/635
         #https://blog.csdn.net/zjc910997316/article/details/103559837
@@ -122,7 +139,6 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     
     all_batches_num=len(train_iter)
     losses_num=len(losses)
-    losses_name=kwargs.get('losses_name')
     give_loss_name=True
     if losses_name is None: #实际losses_name的长度应等于所有损失函数的输出数量的总和，这边只是先赋一个初值，后面可能
                             #还会进行修改，因为有些损失函数的输出不止一个，譬如
@@ -133,7 +149,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     if coeffis is None: #coeffis长度默认和losses_name保持一致，默认值全为1
         coeffis=[1]*len(losses_name)
 
-    out_loss_map=kwargs.get('out_loss_map') #譬如：[[(0,1),(0,)],[(2,3),(1,2)]]，表示网络输出out的第一个和第二个值（张量）作为第一个损失的输入，而
+    # out_loss_map=kwargs.get('out_loss_map') #譬如：[[(0,1),(0,)],[(2,3),(1,2)]]，表示网络输出out的第一个和第二个值（张量）作为第一个损失的输入，而
                                             #out的第三个输出和第四个输出分别是作为第二个损失和第三个损失的输入，所以一共有三个损失，那么coeffis损失系
                                             #数列表应该包含三个权重值，一般情况下都是这样，但是还有一种特殊情况之前也已经介绍过，就是像AlignedReID那
                                             #种一个损失函数输出多个子损失的，此处姑且假设第一个损失函数的输出包含两个值，那么拢共就应该有四个损失，相
@@ -141,6 +157,9 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                                             #为第一个损失的输入，第二个输出张量作为第二个损失的输入，依此类推，写法就是：[[(0,),(0,)],[(1,),(1,)]]
     coeffis_lossesname_flag=True
     
+    if if_visdom: #https://github.com/facebookresearch/visdom
+        print('Startup visdom, please execute "python -m visdom.server"!')
+        vis=Visdom(env='train') #python -m visdom.server
     for epoch in range(start_epoch,epochs):
         pt.cuda.synchronize()
         last_time=time.time()
@@ -177,6 +196,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                 coeffis=[1]*nLlist
                 coeffis_lossesname_flag=False
             L=sum([coeffis[i]*l for i,l in enumerate(Llist)])
+
             optimizer.zero_grad()
             if use_amp:
                 with amp.scale_loss(L, optimizer) as scaled_loss:
@@ -196,6 +216,13 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                     for i in range(nLlist)])), \
                     ', '.join(['lr(%s)=%s'%(e.get('name',i+1),'{:g}'.format(e['lr'])) for i,e in enumerate(opt_parms)]) \
                     if len(list(opt_parms))>1 else 'lr=%s'%('{:g}'.format(opt_parms[0]['lr'])),time_consume))
+                
+                if if_visdom:
+                    vis.line(X=np.array(epoch*all_batches_num+batch_ind+1)[None],Y=L.detach().cpu().numpy()[None], \
+                        win='batch_win',update='append',opts=dict(title='batch loss',xlabel='batch'))
+                if if_tensorboard:
+                    with SummaryWriter(log_dir=log_dir) as writer:
+                        writer.add_scalar('train/batch_loss',L.detach().cpu(),epoch*all_batches_num+batch_ind+1)
         if scheduler is not None:
             scheduler.step()
         if checkpoint is not None:
@@ -203,4 +230,23 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                     isinstance(net,nn.DataParallel) else net.state_dict(),'epoch':epoch,
                     'optimizer':optimizer.state_dict(),
                     'scheduler':None if scheduler is None else scheduler.state_dict()},**({'amp':amp.state_dict()} if use_amp else {})})
+        if kwargs.get('query_iter') and kwargs.get('gallery_iter') and kwargs.get('evaluate'):
+            print('Calc CMC of query and gallery(Test Set), ',end='')
+            rank1,mAP=test(net,device=device,return_top_rank=True,if_print=False,**kwargs) #kwargs参数全部传递给test函数，除了query_iter、gallery_iter、evaluate
+                                                                            #是必须传递之外，还有calc_dist_funcs、alphas、re_rank这些则是可选的
+            net.train() #由于test函数中更改网络为eval模式，此处重置回train模式，然后继续训练
+            if isinstance(net,nn.DataParallel):
+                net.module.train_mode=True
+            else:
+                net.train_mode=True
+            if if_visdom or if_tensorboard:
+                print('see result in localhost(%s)'%('visdom,tensorboard' if if_visdom and if_tensorboard else ('visdom' if if_visdom else 'tensorboard')))
+                if if_visdom:
+                    vis.line(X=np.array([[epoch+1,epoch+1]]),Y=np.array([[rank1*100,mAP*100]]), \
+                        win='rank1_mAP_win',update='append',opts=dict(legend=['rank-1','mAP'],title='rank-1 and mAP',markers='.',xlabel='epoch'))
+                if if_tensorboard:
+                    with SummaryWriter(log_dir=log_dir) as writer:
+                        writer.add_scalars('train/rank1_mAP',{'rank-1':rank1*100,'mAP':mAP*100},epoch+1)
+            else:
+                print('rank-1:%.2f%% and mAP:%f'%(rank1*100,mAP*100))
     print('Train OVER!')

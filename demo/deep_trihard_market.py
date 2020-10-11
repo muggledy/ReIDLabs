@@ -103,7 +103,7 @@ if __name__=='__main__':
         losses_name.append('idLoss')
         cpflag+='C'
     if 'metric' in used_losses:
-        mloss=TripletHardLoss(margin,mode='norm')
+        mloss=TripletHardLoss(margin,mode='norm') #norm为标准版三元组损失
         losses.append(mloss)
         losses_name.append('triHardLoss')
         cpflag+='M'

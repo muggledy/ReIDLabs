@@ -4,7 +4,7 @@ from torch.utils.data import Dataset,DataLoader
 import torchvision.transforms as T
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
-from deep.transform import RandomErasing
+from deep.transform import RandomErasing,ColorJitter,Lighting
 # from zoo.tools import LRU
 
 def read_image(img_path):
@@ -46,8 +46,21 @@ class testDataset(Dataset): #用于构造测试图像数据集，测试图像没
             img=self.transform(img)
         return (img,)
 
+'''
+  DataLoader ←——————————————————— Batch Data
+       ↓                              ↑
+ DataLoaderIter                   collate_fn
+       ↓                              ↑
+    Sampler —————→ Index          Img,Label
+       ↓             |                ↑
+ DataSetFetcher ←————┛                |
+       ↓                              |
+    Dataset ——————→ getitem ————→ transforms
+'''
+
 default_train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(),RandomErasing(), \
-    T.ToTensor(),T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
+    T.ToTensor(),T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))] #T.Normalize: 
+    #逐channel对图像进行标准化，公式：output = (input - mean) / std。其中mean默认为各通道的均值，std默认为各通道的标准差
 default_test_transforms=[T.Resize((256,128)),T.ToTensor(), \
     T.Normalize(mean=(0.485,0.456,0.406),std=(0.229,0.224,0.225))]
 
