@@ -25,12 +25,14 @@ def setup_seed(seed):
 
 @measure_time
 def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,use_amp=False, \
-          amp_level='O1',losses_name=None,out_loss_map=None,if_visdom=False,if_tensorboard=False,tensorboard_subdir=None,**kwargs):
+          amp_level='O1',losses_name=None,out_loss_map=None,if_visdom=False,if_tensorboard=False,tensorboard_subdir=None,
+          use_cids=None,**kwargs):
     '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]，即序列形式。总体损失loss
        =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...
        device的值可以是：str('cpu' or 'cuda'),scalar(0, index of GPU),list([0,1], indexes list 
        of GPU),None(优先使用GPU),torch.device,对于list，表示多卡训练，特别的，可以取值'DP'，表示
-       使用全部GPU设备并行'''
+       使用全部GPU设备并行。所有损失都默认使用pids信息，在查看所有损失定义的时候，损失最后一个参数都
+       是pids，如果要使用cids，必须显式提供use_cids参数，其长度和losses参数一致'''
     if if_tensorboard:
         log_dir=os.path.normpath(os.path.join(os.path.dirname(__file__),'../../data/tensorboard_logdir/', \
             '' if tensorboard_subdir is None else tensorboard_subdir))
@@ -148,6 +150,10 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         give_loss_name=False
     if coeffis is None: #coeffis长度默认和losses_name保持一致，默认值全为1
         coeffis=[1]*len(losses_name)
+    if use_cids is None:
+        use_cids=[False for i in range(losses_num)]
+    if len(use_cids)!=losses_num:
+        raise ValueError('use_cids\'s length must be the same as losses!')
 
     # out_loss_map=kwargs.get('out_loss_map') #譬如：[[(0,1),(0,)],[(2,3),(1,2)]]，表示网络输出out的第一个和第二个值（张量）作为第一个损失的输入，而
                                             #out的第三个输出和第四个输出分别是作为第二个损失和第三个损失的输入，所以一共有三个损失，那么coeffis损失系
@@ -164,7 +170,7 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         pt.cuda.synchronize()
         last_time=time.time()
         for batch_ind,(batchImgs,pids,cids) in enumerate(train_iter):
-            batchImgs,pids=batchImgs.to(device),pids.to(device).to(pt.int64) #目前用不到cids摄像头信息
+            batchImgs,pids,cids=batchImgs.to(device),pids.to(device).to(pt.int64),cids.to(device).to(pt.int64)
             # print([False for i in net.parameters() if not i.is_cuda]) #查看是否有网络参数不在cuda上
             out=net(batchImgs)
             if not isinstance(out,(list,tuple)):
@@ -175,14 +181,15 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
             Llist=[]
             if out_loss_map is None:
                 for losses_ind,loss in enumerate(losses):
-                    subL=loss(out[losses_ind],pids)
-                    if isinstance(subL,(list,tuple)): #要求损失函数的输出要么是单个0维tensor，要么是多个0维tensor的列表！
+                    subL=loss(out[losses_ind],*[pids,cids] if use_cids[losses_ind] else [pids])
+                    if isinstance(subL,(list,tuple)): #要求损失函数的输出要么是单个0维tensor（损失是标量），要么是多个0维tensor的列表！
                         Llist.extend(subL)
                     else:
                         Llist.append(subL)
             else:
                 for out_inds,loss_inds in out_loss_map:
-                    subLs=[losses[loss_ind](*[out[out_ind] for out_ind in out_inds],pids) for loss_ind in loss_inds]
+                    subLs=[losses[loss_ind](*[out[out_ind] for out_ind in out_inds], \
+                        *[pids,cids] if use_cids[loss_ind] else [pids]) for loss_ind in loss_inds]
                     for subL in subLs:
                         if isinstance(subL,(list,tuple)):
                             Llist.extend(subL)
