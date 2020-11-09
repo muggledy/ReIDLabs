@@ -4,11 +4,13 @@ import torchvision
 import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../'))
-from deep.models.utils import FlattenLayer,Norm1DLayer,HorizontalPool2d,seek_ks_3m,_weights_init,LambdaLayer
+from deep.models.utils import FlattenLayer,Norm1DLayer,HorizontalPool2d,seek_ks_3m,_weights_init, \
+    LambdaLayer,GRL,ReverseLayerF
 from torchvision.models.resnet import Bottleneck
 import torch.nn.functional as F
 import copy
 import deep.models.resnet56 as ResNet56
+import numpy as np
 
 class ResNet50_Classify(nn.Module): #https://blog.csdn.net/qq_31347869/article/details/100566719
     '''最简单的基于ResNet50的分类网络，适用ID损失，目前还可以用于使用OIM损失，也可以传递其他主干网backbone，譬如CBAM中
@@ -330,6 +332,41 @@ class ResNet56_Classify(ResNet50_Classify): #使用在CIFRA10上预训练的resn
                                     #我的意思仅仅是该resnet56收敛速度慢，并不代表它的损失不能下降到0.x%
     def __init__(self,num_ids,pretrained=True,oim=False):
         super(ResNet56_Classify,self).__init__(num_ids,oim,ResNet56.resnet56(pretrained=pretrained),64)
+
+class ResNet50_Classify_CamInvariant(ResNet50_Classify): #在ResNet50_Classify（IDE）模型基础上添加摄像头判别器，来帮助提取与摄像头风格无关的行人特征
+    def __init__(self,*args,**kwargs): #和ResNet50_Classify参数相比，只额外传递cam_nums和alpha关键字参数，其他全部如数传递给ResNet50_Classify。如果alpha为None，
+                                       #表示自动计算alpha，还需传递count参数（count=epochs*batch_num）
+        cam_nums,self.alpha=kwargs['cam_nums'],kwargs['alpha']
+        del kwargs['cam_nums']
+        del kwargs['alpha']
+        self.auto_calc_alpha=False
+        if self.alpha==None:
+            self.auto_calc_alpha=True
+            self._c=0
+            self.count=kwargs['count']
+            del kwargs['count']
+        super(ResNet50_Classify_CamInvariant,self).__init__(*args,**kwargs)
+        # self.camera_discrimination=nn.Sequential(
+        #     nn.Linear(2048, 128),
+        #     nn.BatchNorm1d(128),
+        #     nn.ReLU(inplace=True),
+        #     nn.Linear(128, cam_nums)
+        # )
+        self.camera_discrimination=nn.Linear(2048,cam_nums)
+        # self.GRL=GRL(alpha)
+
+    def forward(self,X):
+        f=self.base(X)
+        if self.train_mode:
+            if self.auto_calc_alpha:
+                self.alpha=2. / (1. + np.exp(-10 * (self._c/self.count))) - 1
+                self._c=self._c+1
+            reversed_feature=ReverseLayerF.apply(f,self.alpha)
+            if self.oim:
+                return f,self.camera_discrimination(reversed_feature)
+            return self.classifier(f),self.camera_discrimination(reversed_feature)
+        else:
+            return f
 
 if __name__=='__main__':
     net=ResNet50_PCB(751)

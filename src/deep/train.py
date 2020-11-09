@@ -26,13 +26,15 @@ def setup_seed(seed):
 @measure_time
 def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,use_amp=False, \
           amp_level='O1',losses_name=None,out_loss_map=None,if_visdom=False,if_tensorboard=False,tensorboard_subdir=None,
-          use_cids=None,**kwargs):
+          use_pcids=None,**kwargs):
     '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]，即序列形式。总体损失loss
        =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...
        device的值可以是：str('cpu' or 'cuda'),scalar(0, index of GPU),list([0,1], indexes list 
        of GPU),None(优先使用GPU),torch.device,对于list，表示多卡训练，特别的，可以取值'DP'，表示
        使用全部GPU设备并行。所有损失都默认使用pids信息，在查看所有损失定义的时候，损失最后一个参数都
-       是pids，如果要使用cids，必须显式提供use_cids参数，其长度和losses参数一致'''
+       是pids，如果要使用cids，必须显式提供use_pcids参数，取值为'P','C','PC','CP'，默认仅使用pids，
+       'PC'和'CP'的区别是pids在前还是cids在前，如果非这四种取值，则表示不使用任何监督信号，相应的损失
+       定义也不含有pids和cids参数，且use_pcids长度和losses参数一致'''
     if if_tensorboard:
         log_dir=os.path.normpath(os.path.join(os.path.dirname(__file__),'../../data/tensorboard_logdir/', \
             '' if tensorboard_subdir is None else tensorboard_subdir))
@@ -150,10 +152,10 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         give_loss_name=False
     if coeffis is None: #coeffis长度默认和losses_name保持一致，默认值全为1
         coeffis=[1]*len(losses_name)
-    if use_cids is None:
-        use_cids=[False for i in range(losses_num)]
-    if len(use_cids)!=losses_num:
-        raise ValueError('use_cids\'s length must be the same as losses!')
+    if use_pcids is None:
+        use_pcids=['P' for i in range(losses_num)]
+    if len(use_pcids)!=losses_num:
+        raise ValueError('use_pcids\'s length must be the same as losses!')
 
     # out_loss_map=kwargs.get('out_loss_map') #譬如：[[(0,1),(0,)],[(2,3),(1,2)]]，表示网络输出out的第一个和第二个值（张量）作为第一个损失的输入，而
                                             #out的第三个输出和第四个输出分别是作为第二个损失和第三个损失的输入，所以一共有三个损失，那么coeffis损失系
@@ -181,7 +183,9 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
             Llist=[]
             if out_loss_map is None:
                 for losses_ind,loss in enumerate(losses):
-                    subL=loss(out[losses_ind],*[pids,cids] if use_cids[losses_ind] else [pids])
+                    subL=loss(out[losses_ind],*[pids] if use_pcids[losses_ind]=='P' else [cids] \
+                        if use_pcids[losses_ind]=='C' else [pids,cids] if use_pcids[losses_ind]=='PC' \
+                        else [cids,pids] if use_pcids[losses_ind]=='CP' else [])
                     if isinstance(subL,(list,tuple)): #要求损失函数的输出要么是单个0维tensor（损失是标量），要么是多个0维tensor的列表！
                         Llist.extend(subL)
                     else:
@@ -189,7 +193,9 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
             else:
                 for out_inds,loss_inds in out_loss_map:
                     subLs=[losses[loss_ind](*[out[out_ind] for out_ind in out_inds], \
-                        *[pids,cids] if use_cids[loss_ind] else [pids]) for loss_ind in loss_inds]
+                        *[pids] if use_pcids[loss_ind]=='P' else [cids] if use_pcids[loss_ind]=='C' \
+                        else [pids,cids] if use_pcids[loss_ind]=='PC' else [cids,pids] \
+                        if use_pcids[loss_ind]=='CP' else []) for loss_ind in loss_inds]
                     for subL in subLs:
                         if isinstance(subL,(list,tuple)):
                             Llist.extend(subL)
@@ -224,12 +230,15 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                     ', '.join(['lr(%s)=%s'%(e.get('name',i+1),'{:g}'.format(e['lr'])) for i,e in enumerate(opt_parms)]) \
                     if len(list(opt_parms))>1 else 'lr=%s'%('{:g}'.format(opt_parms[0]['lr'])),time_consume))
                 
-                if if_visdom:
-                    vis.line(X=np.array(epoch*all_batches_num+batch_ind+1)[None],Y=L.detach().cpu().numpy()[None], \
-                        win='batch_win',update='append',opts=dict(title='batch loss',xlabel='batch'))
+                vt_x=epoch*all_batches_num+batch_ind+1
+                vt_y=[vt_l.detach().cpu().numpy().item()*vt_a for vt_l,vt_a in list(zip([L]+Llist,[1]+list(coeffis)))]
+                vt_yn=['all']+['(sub)%s'%vt_ln for vt_ln in losses_name]
+                if if_visdom: #https://blog.csdn.net/u011715038/article/details/106179313/
+                    vis.line(X=[vt_x],Y=[vt_y],win='batch_win',update='append', \
+                        opts=dict(title='batch loss',xlabel='batch',legend=vt_yn))
                 if if_tensorboard:
                     with SummaryWriter(log_dir=log_dir) as writer:
-                        writer.add_scalar('train/batch_loss',L.detach().cpu(),epoch*all_batches_num+batch_ind+1)
+                        writer.add_scalars('train/batch_loss',{vt_yni:vt_yi for vt_yi,vt_yni in list(zip(vt_y,vt_yn))},vt_x)
         if scheduler is not None:
             scheduler.step()
         if checkpoint is not None:

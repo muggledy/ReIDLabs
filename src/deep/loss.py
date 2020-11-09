@@ -76,7 +76,8 @@ References:
     https://www.zhihu.com/question/46943328/answer/155815511
 '''
 
-class OIM(autograd.Function):
+class OIM(autograd.Function): #https://github.com/pytorch/pytorch/blob/949d6ae184a15bbed3f30bb0427268c86dc4f5bb/torch/autograd/function.py
+    #http://www.treeney.com/2018/05/20/pytorch-%E5%AE%9E%E7%8E%B0%E8%87%AA%E5%AE%9A%E4%B9%89%E6%93%8D%E4%BD%9C%E5%8F%8A%E5%8F%8D%E5%90%91%E4%BC%A0%E5%AF%BC/
     # def __init__(self, lut, momentum=0.5):
     #     super(OIM, self).__init__()
     #     self.lut = lut
@@ -245,8 +246,7 @@ class RingLoss(nn.Module):
         super(RingLoss, self).__init__()
         self.radius = nn.Parameter(pt.ones(1, dtype=pt.float).to(get_device(device)))
 
-    def forward(self, x, y): #一般损失接受两个输入，特征和对应的标签，标签是作为监督信息的，但是此处RingLoss是一个例外，
-                             #RingLoss只接受特征输入，但是为了兼容已有训练代码（train.py），额外添加一个参数y，但是不使用
+    def forward(self, x):
         l = ((x.norm(p=2, dim=1) - self.radius)**2).mean()
         return l
 

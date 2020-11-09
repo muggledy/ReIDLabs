@@ -46,9 +46,9 @@ def extract_feats(net,data_iter,device=None,**kwargs):
             feat=net(batch).data.cpu()
             feats.append(feat)
         feats=pt.cat(feats,0)
-    feats=feats.numpy() #(n,d)
+    feats=feats.numpy().T #(d,n)
     print('Extracted features%s successfully'%str(feats.shape))
-    return feats.T
+    return feats
 
 # @measure_time
 def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],device=None,save_galFea=None, \

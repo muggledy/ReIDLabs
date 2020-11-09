@@ -25,6 +25,8 @@ link_cuhk03='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3
 link_cuhk03np='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBbmtTYTEtT3NXUFBpM1lBQVJmUnF5UURHMVIwP2U9T2FQYWpk.mp3'
 link_shinpuhkan='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBcjdORVNsRGhsRXRhLXF4U2ZGZXJ0LVg3NlE/ZT1SRUJ2aGQ=.mp3'
 link_cuhksysu='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBcjdORVNsRGhsRXRieG01YURmbFpPS0RURG8/ZT1RMVJiM3c=.mp3'
+link_duke='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBcjdORVNsRGhsRXRjcF9sdUZhci1PcDlGVXc/ZT1GNjlxVjY=.mp3'
+link_msmt17='https://link.gimhoy.com/1drv/aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBcjdORVNsRGhsRXRjMXdBM0tMeUZ4cmN5YzQ/ZT1zelhjd0w=.mp3' #2.38G
 
 def download_dateset(dataset,save_dir=None): #注意压缩数据集下载到本地将自动解压，原压缩文件会被代码删除
     dataset=dataset.lower()
@@ -56,7 +58,7 @@ def download_eigen(save_dir=None): #一定要解压到/src/third-party/目录下
 if __name__=='__main__':
     # download_dateset('ilids')
     # download_dateset('prid2011')
-    download_dateset('3dpes')
+    download_dateset('duke')
     # download_eigen()
     # import pickle
     # with open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'crawler_temp.pickle'),'rb') as f:

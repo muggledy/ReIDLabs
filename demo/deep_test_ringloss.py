@@ -47,6 +47,7 @@ if __name__=='__main__':
         checkpoint=checkpoint,losses_name=('SoftmaxLoss','RingLoss'), \
         coeffis=(1,alpha),use_amp=True,device='DP', \
         if_tensorboard=True,tensorboard_subdir='deep_test_ringloss', \
+        use_pcids=['P','*'], \
         # if_visdom=True, \
         query_iter=query_iter,gallery_iter=gallery_iter,evaluate=eval_cmc_map) #每一个epoch都计算测试集精度极耗费时间，用于选择最佳epoch训练次数
                                                               #原则上不能使用测试集，而应在训练集中划分验证集，但是此处不好划分验证集

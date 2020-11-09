@@ -1,5 +1,4 @@
 import torch as pt
-import torch.nn as nn
 import os.path
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../'))
@@ -8,6 +7,7 @@ from zoo.tools import euc_dist_pro as euc_dist_pro_numpy
 from zoo.cprint import cprint_err
 import numpy as np
 from tqdm import tqdm
+from torch import nn, autograd
 
 class FlattenLayer(nn.Module):
     def __init__(self):
@@ -130,7 +130,7 @@ class HorizontalPool2d(nn.Module): #水平池化
         elif self.type=='avg':
             return nn.AvgPool2d(kernel_size=(self.k,X.size(3)),stride=self.s)(X)
 
-def shortest_dist(dist):
+def shortest_dist(dist): #used for AlignedReID
     '''利用动态规划算法计算最短路径，输入dist形状为(m,n)或(m,n,batch_size)，前者将返回一个标量，
        后者返回一个长度为batch_size的向量'''
     if isinstance(dist,pt.Tensor):
@@ -153,7 +153,7 @@ def shortest_dist(dist):
                     t[i][j]=np.minimum(t[i-1][j],t[i][j-1])+dist[i][j]
     return t[-1][-1]
 
-def dist_DMLI(X,Y):
+def dist_DMLI(X,Y): #used for AlignedReID
     '''具体参考AlignedReID论文。计算X(batch_size,dim,m)和Y(batch_size,dim,n)之间的DMLI距离
        ，其中X[i,:,:]代表了第i个行人的m个长度为dim的水平条特征，函数返回D，形状为(batch_size,)
        ，D[i]即X中第i个行人图像和Y中第i个行人图像的局部特征做对齐后所求距离值，其根据最短路径（基于动
@@ -168,7 +168,7 @@ def dist_DMLI(X,Y):
         D=shortest_dist(np.rollaxis(stripe_dist_mat,0,3)).reshape(-1)
     return D
 
-def calc_dist_DMLI(X,Y,desc=('query','gallery'),if_print=True):
+def calc_dist_DMLI(X,Y,desc=('query','gallery'),if_print=True): #used for AlignedReID
     '''return a dist matrix(m,n) between X(m,·,·) and Y(n,·,·), about (,·,·), see dist_DMLI'''
     if if_print:
         print('Calc DMLI distance between %s%s and %s%s:'%(desc[0],str(tuple(X.shape)) if \
@@ -244,11 +244,11 @@ class LambdaLayer(nn.Module): #有了这个类，譬如要添加flatten层，就
     def forward(self, x):
         return self.lambd(x)
 
-class ChannelPool(nn.Module):
+class ChannelPool(nn.Module): #used for CBAM
     def forward(self, x):
         return pt.cat( (pt.max(x,1)[0].unsqueeze(1), pt.mean(x,1).unsqueeze(1)), dim=1 )
 
-class BasicConv(nn.Module):
+class BasicConv(nn.Module): #used for CBAM
     def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1, groups=1, relu=True, bn=True, bias=False):
         super(BasicConv, self).__init__()
         self.out_channels = out_planes
@@ -264,7 +264,7 @@ class BasicConv(nn.Module):
             x = self.relu(x)
         return x
 
-def logsumexp_2d(tensor): #used for CBAM(attention)
+def logsumexp_2d(tensor): #used for CBAM
     tensor_flatten = tensor.view(tensor.size(0), tensor.size(1), -1)
     s, _ = pt.max(tensor_flatten, dim=2, keepdim=True)
     outputs = s + (tensor_flatten - s).exp().sum(dim=2, keepdim=True).log()
@@ -284,10 +284,34 @@ def get_device(device):
         device=pt.device('cuda',device)
     return device
 
+class ReverseLayerF(autograd.Function):
+    '''
+    https://github.com/wogong/pytorch-dann/blob/f81f06d97134e6e1372d635931a8d175087d2986/models/functions.py#L4
+    '''
+    @staticmethod
+    def forward(ctx, x, alpha):
+        ctx.alpha = alpha
+
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        output = grad_output.neg() * ctx.alpha
+        return output, None
+
+class GRL(nn.Module): #梯度反转层
+    def __init__(self,alpha):
+        super(GRL,self).__init__()
+        self.grl=ReverseLayerF.apply
+        self.alpha=alpha
+
+    def forward(self,X):
+        return self.grl(X,self.alpha)
+
 if __name__ == "__main__":
     # k,s=seek_ks_3m(24,6)[:2]
     # print(k,s)
     X=np.arange(3*5*3).reshape(3,5,3)
     Y=np.arange(4*5*2).reshape(4,5,2)
-    print(calc_dist_query_gallery_DMLI(pt.from_numpy(X).to(pt.float32),pt.from_numpy(Y).to(pt.float32)))
-    print(calc_dist_query_gallery_DMLI(X,Y))
+    print(calc_dist_DMLI(pt.from_numpy(X).to(pt.float32),pt.from_numpy(Y).to(pt.float32)))
+    print(calc_dist_DMLI(X,Y))

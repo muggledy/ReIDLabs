@@ -86,7 +86,7 @@ class DataSetBase:
             self.galleryDir=None
 
     def print_info(self):
-        print("Dataset statistics:")
+        print("%s statistics:"%self.__class__.__name__)
         print("  --------------------------------------")
         print("  subset    | # pids | # cids | # images")
         print("  --------------------------------------")
@@ -136,13 +136,16 @@ class Market1501(DataSetBase): #也可用来处理其他类似Market1501且只�
         
         exist_subdirs=np.array([os.path.exists(i) for i in [train_dir,query_dir,gallery_dir]])
         if not np.all(exist_subdirs):
-            raise IOError('Market1501(%s) is not available!'% \
-                (', '.join((np.array(subdirs)[np.where(exist_subdirs==False)]).tolist())))
+            raise IOError('%s(%s) is not available!'% \
+                (self.__class__.__name__,', '.join((np.array(subdirs)[np.where(exist_subdirs==False)]).tolist())))
 
         super(Market1501,self).__init__((train_dir,True,analyse),(query_dir,False,analyse), \
             (gallery_dir,False,analyse))
 
 class CUHK03_NP(Market1501): #处理步骤完全同Market1501
+    pass
+
+class DukeMTMC(Market1501): #处理步骤完全同Market1501
     pass
 
 class load_query_gallery_dataset(DataSetBase):
@@ -491,7 +494,7 @@ class MixDataSets: #混合多个数据集，当前是为无监督模型迁移编
             starts=ends-np.array(img_nums)
         else:
             names=[]
-        print("Dataset statistics:")
+        print("MixDataSets statistics:")
         print("  ----------------------------------------")
         print("  subset      | # pids | # cids | # images")
         print("  ----------------------------------------")
@@ -533,3 +536,5 @@ if __name__=='__main__':
     # print(t[:10])
     # t=process_shinpuhkan(os.path.join(dataset_dir,'Shinpuhkan/images/'),True)
     # print(t[2][:10])
+    duke=DukeMTMC(os.path.join(dataset_dir,'DukeMTMC'))
+    duke.print_info()

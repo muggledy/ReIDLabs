@@ -13,7 +13,8 @@ from lomo.tools import getcwd
 from matplotlib.path import Path
 from matplotlib import patches
 
-def plot_dataset(X,identity_labels,camera_labels=None,method='PCA',dim=2):
+def plot_dataset(X,identity_labels,camera_labels=None,method='PCA',dim=2, \
+                 only_colour_cameras=False,colormap=None):
     '''X is the dataset which X[:,i] represents one sample, method 
        can be 'PCA' or 'LDA', dim can be 2 or 3. Different camera has different 
        marker, different identity has different color in the plotting'''
@@ -29,21 +30,32 @@ def plot_dataset(X,identity_labels,camera_labels=None,method='PCA',dim=2):
         camera_labels=np.zeros(len(identity_labels))
     else:
         camera_labels=norm_labels(camera_labels)
-    camera_markers=['+','^','.','*','s','D','x','1'] #8 preset camera tags, so 8 is 
-                                                     #the maximum num of cameras
-    identity_colors=cm.gist_rainbow(Normalize(0,1)(np.linspace(0,1, \
-                                                   np.max(identity_labels)+1))) 
+    camera_markers=['+','^','.','*','s','D','x','1', \
+                    ',','o','v','<','>','2','3','4','8','p','P','h','H','d','|','_', \
+                    0,1,2,3,4,5,6,7,8,9,10,11] #36 preset camera tags, so 36 is 
+                                               #the maximum num of cameras
+    if colormap is None:
+        colormap=cm.rainbow if only_colour_cameras else cm.gist_rainbow
+    
+    cam_num=int(np.max(camera_labels))+1
+    if only_colour_cameras:
+        camera_colors=colormap(Normalize()(range(cam_num)))
+    else:
+        identity_colors=colormap(Normalize()(range(np.max(identity_labels)+1)))
                                                      #there are not thousands of colors 
                                                      #for human eyes to distinguish
-    cam_num=int(np.max(camera_labels))+1
     if dim==2:
         ax=plt.gca()
     if dim==3:
         ax=Axes3D(plt.gcf())
     for i in range(cam_num):
-        t=np.where(camera_labels==i)
+        t=np.where(camera_labels==i)[0]
         cam_data=X[:,t]
-        ax.scatter(*cam_data,marker=camera_markers[i],c= \
+        if only_colour_cameras:
+            ax.scatter(*cam_data,marker=camera_markers[i],c= \
+                np.broadcast_to(camera_colors[i],(len(t),camera_colors.shape[1])))
+        else:
+            ax.scatter(*cam_data,marker=camera_markers[i],c= \
                                          identity_colors[identity_labels[t]])
     plt.show()
 
@@ -105,5 +117,5 @@ if __name__=='__main__':
     iris=datasets.load_iris()
     n=iris.data.shape[0]
     m=int(n/4)
-    plot_dataset(iris.data.T,[0]*m+[1]*m+[2]*m+[3]*(n-3*m),[0]*(n//2)+[1]*(n-n//2),dim=2)
+    plot_dataset(iris.data.T,[0]*m+[1]*m+[2]*m+[3]*(n-3*m),[0]*(n//2)+[1]*(n-n//2),dim=3,only_colour_cameras=False)
     

@@ -44,6 +44,7 @@ if __name__=='__main__':
     num_epochs=100
     train(net,train_iter,(triplet_loss,center_loss),optimizer,num_epochs,scheduler, \
         checkpoint=checkpoint,losses_name=('TriHardLoss','CenterLoss'), \
+        # if_visdom=True, \
         coeffis=(1,alpha),use_amp=True,out_loss_map=[[(0,),(0,1)]]) #将网络的输出（网络只有一个输出）分别作为第一
                                                                     #个损失和第二个损失的输入，一共两个损失
     test(net,query_iter,gallery_iter,eval_cmc_map)
