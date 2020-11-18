@@ -26,6 +26,7 @@ from deep.models.utils import CheckPoint,get_rest_params
 import torchvision.transforms as T
 import torch as pt
 import torch.nn as nn
+pt.multiprocessing.set_sharing_strategy('file_system')
 
 if __name__=='__main__':
     setup_seed(0)

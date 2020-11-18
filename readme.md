@@ -33,7 +33,7 @@ trusted-host = https://pypi.tuna.tsinghua.edu.cn
 
 或通过`-i`临时指定：`pip install numpy==1.16.4 -i http://pypi.douban.com/simple/ --trusted-host=pypi.douban.com/simple/`
 
-从*./environment.yaml*安装虚拟环境：`conda env create -f environment.yaml`
+从*./environment.yaml*安装虚拟环境：`conda env create -f environment.yaml`（如果要部署到Linux上，使用*./data/environment_linux.yaml*）
 
 激活虚拟环境：`activate reid`
 
@@ -44,7 +44,7 @@ trusted-host = https://pypi.tuna.tsinghua.edu.cn
 ```shell
 git clone https://github.com/ptrblck/apex.git
 cd apex
-python setup.py install
+python setup.py install #if deploy on Linux, run: pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 ```
 
 警告（暂时无法解决）Warning:  multi_tensor_applier fused unscale kernel is unavailable, possibly because apex was installed without --cuda_ext --cpp_ext. Using Python fallback.  Original ImportError was: ModuleNotFoundError("No module named 'amp_C'",)

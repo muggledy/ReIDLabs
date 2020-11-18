@@ -1,3 +1,5 @@
+# -*- coding: UTF-8 -*-
+
 '''
 The first implemented deep reid method with Rank-1 81.24% and mAP 63.83
 (Rank-1:81.24% Rank-5:93.05% Rank-10:95.34% Rank-20:96.62% Rank-100:99.02%)
@@ -51,9 +53,11 @@ from deep.models.utils import CheckPoint
 import torch as pt
 import torch.nn as nn
 from deep.plot_match import plot_match
-from deep.loss import OIMLoss,CrossEntropyLabelSmooth
+from deep.loss import OIMLoss,LabelSmoothLoss
 import deep.models.attention.CBAM as CBAM
 # from functools import partial
+# 当我在Linux上执行到test函数时出现pytorch RuntimeError: received 0 items of ancdata，原因未知
+pt.multiprocessing.set_sharing_strategy('file_system') #https://github.com/pytorch/pytorch/issues/973
 
 if __name__=='__main__': #话说为什么这部分代码一定要放在__main__块中？好像是多进程加载数据DataLoader的缘故
                          #且仅限于Windows，https://pytorch.apachecn.org/docs/1.2/data.html
@@ -71,7 +75,7 @@ if __name__=='__main__': #话说为什么这部分代码一定要放在__main__�
     net=ResNet50_Classify(num_classes,oim=True,backbone=None) #backbone值可以替换成CBAM.resnet50()，带注意力的resnet50版本
 
     # loss=nn.CrossEntropyLoss() #普通分类交叉熵损失
-    # loss=CrossEntropyLabelSmooth(num_classes) #标签平滑损失
+    # loss=LabelSmoothLoss(num_classes) #标签平滑损失
     loss=OIMLoss(2048,num_classes,scalar=30,momentum=0.5,device=None) #see in https://github.com/Cysu/open-reid/blob/master/examples/oim_loss.py
     # lr,num_epochs=0.00035,30
     lr,num_epochs=0.0003,60

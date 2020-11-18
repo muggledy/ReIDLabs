@@ -52,7 +52,7 @@ def extract_feats(net,data_iter,device=None,**kwargs):
 
 # @measure_time
 def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],device=None,save_galFea=None, \
-         calc_dist_funcs=None,alphas=None,re_rank=False,return_top_rank=False,if_print=True):
+         calc_dist_funcs=None,alphas=None,re_rank=False,return_top_rank=False,if_print=True,uda_test_who=None):
     '''如果gallery_iter不是DataLoader对象，而是普通路径字符串，表示gallery特征将从文件加载。
        如果save_galFea不是None而是路径字符串，则会保存经过网络提取的gallery特征至该路径'''
     device=pt.device('cuda' if pt.cuda.is_available() else 'cpu') if device is None else device
@@ -60,7 +60,6 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
 
     net=net.to(device)
     net.eval()
-    # net.train_mode=False
     if isinstance(net,nn.DataParallel): #我在train函数中调用了test函数，此时net可能是DataParallel对象
         net.module.train_mode=False
     else:
@@ -68,12 +67,19 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
 
     if return_top_rank and evaluate is None:
         raise ValueError('Must give evaluate creation if want return top rank!')
+    if uda_test_who is not None and uda_test_who not in ['source','target']: #uda_test_who参数仅用于UDA模型测试
+        raise ValueError('uda_test_who must be in [\'source\',\'target\']!')
 
     with pt.no_grad():
         q_feas,q_pids,q_cids=[],[],[]
         for i,(batchImgs,pids,cids) in enumerate(query_iter):
             batchImgs=batchImgs.to(device)
-            batchFeas=net(batchImgs) #batchFeas may be list obj: [tensor,tensor,...]
+            if uda_test_who is None:
+                batchFeas=net(batchImgs) #batchFeas may be list obj: [tensor,tensor,...]
+            elif uda_test_who=='source':
+                batchFeas=net(batchImgs,None)
+            elif uda_test_who=='target':
+                batchFeas=net(None,batchImgs)
             if isinstance(batchFeas,pt.Tensor):
                 batchFeas=batchFeas.data.cpu()
             elif isinstance(batchFeas,(list,tuple)):
@@ -110,7 +116,12 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
             g_feas,g_pids,g_cids=[],[],[]
             for i,(batchImgs,pids,cids) in enumerate(gallery_iter):
                 batchImgs=batchImgs.to(device)
-                batchFeas=net(batchImgs)
+                if uda_test_who is None:
+                    batchFeas=net(batchImgs)
+                elif uda_test_who=='source':
+                    batchFeas=net(batchImgs,None)
+                elif uda_test_who=='target':
+                    batchFeas=net(None,batchImgs)
                 if isinstance(batchFeas,pt.Tensor):
                     batchFeas=batchFeas.data.cpu()
                 elif isinstance(batchFeas,(list,tuple)):
@@ -136,13 +147,7 @@ def test(net,query_iter,gallery_iter,evaluate=None,ranks=[1,5,10,20,50,100],devi
                     d['g_pids']=g_pids
                     d['g_cids']=g_cids
                 scio.savemat(save_galFea,d)
-                
-    #话说这是什么距离？来自：https://github.com/michuanhaohao/deep-person-reid/blob/master/train_img_model_xent.py
-    # m,n=q_feas.size(0),g_feas.size(0)
-    # distmat=pt.pow(q_feas,2).sum(dim=1,keepdim=True).expand(m,n)+ \
-    #         pt.pow(g_feas,2).sum(dim=1,keepdim=True).expand(n,m).t()
-    # distmat.addmm_(1,-2,q_feas,g_feas.t())
-    # distmat=distmat.numpy()
+    
     if isinstance(q_feas,np.ndarray):
         q_feas=[q_feas]
     if isinstance(g_feas,np.ndarray):

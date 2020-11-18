@@ -6,6 +6,7 @@ I don't know where the problem is?
 from initial import *
 from zoo.viper import get_lomo_viper,get_gog_viper
 from zoo.cspl import cspl
+from zoo.tools import print_cmc
 from sklearn.decomposition import PCA
 
 cwd=getcwd(os.path.realpath(__file__))
@@ -53,5 +54,6 @@ for i in range(numFlods):
     cs.append(c)
 cs=np.array(cs)
 c_mean=np.mean(cs,axis=0)
+print_cmc(c_mean)
 print('all time consumes:',time.time()-t1)
 plot_cmc(c_mean,labels=['viper'],verbose=True)

@@ -3,8 +3,19 @@ import cv2
 import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
-os.environ['path']=os.environ['path']+';%s'%os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../scripts/'))
-import rarfile
+import rarfile #如果是Windows平台，需要unrar.exe，并将其路径添加到path环境变量
+               #如果是Linux，通过系统命令安装即可：sudo apt-get install unrar
+               #另卸载命令：sudo apt-get remove --purge unrar
+import platform
+import subprocess
+cur_platform=platform.system().lower()
+if cur_platform=='windows':
+    os.environ['path']=os.environ['path']+';%s'%os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../scripts/'))
+elif cur_platform=='linux':
+    s_p_1 = subprocess.Popen('which unrar', stdout=subprocess.PIPE, shell=True)
+    if not s_p_1.communicate()[0]: #https://blog.csdn.net/HMSIWTV/article/details/8233037
+        print('异常终止: 请自行安装unrar(sudo apt-get install unrar)')
+        sys.exit()
 import zipfile
 from lomo.tools import calc_cmc,measure_time,getcwd
 from zoo.cprint import cprint,fcolors,cprint_err

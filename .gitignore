@@ -14,6 +14,8 @@
 /data/*
 !/data/.gitkeep
 !/data/lda_data_demo.mat
+!/data/environment_linux.yaml
+!/data/transfer_env_to_linux
 /src/cycle_gan/datasets/*
 !/src/cycle_gan/datasets/.gitkeep
 /src/cycle_gan/out

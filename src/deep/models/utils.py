@@ -88,9 +88,10 @@ def euc_dist_pro(X1,X2=None):
 
 def hard_sample_mining(dist,labels,return_inds=False):
     '''困难样本挖掘，dist是一个NxN方阵，labels是轴样本ID序列，长度为N，两个轴标记
-       是一样的，但需要注意的是，此处labels的构成必须是PxK的（N=PxK），表示含有P个
-       不同的行人ID，每个ID行人有K个图像，否则代码出错。return_inds决定是否返回那
-       些困难样本位置索引'''
+       是一样的，但需要注意的是，此处labels的构成【必须】是PxK的（N=PxK），表示含有
+       P个不同的行人ID，每个ID行人有K个图像，否则代码出错，但是并不要求每一行人连续，
+       譬如labels=[0,0,1,1,2,2]是合法的，此处P=3，K=2，而labels=[0,1,1,0,2,2]也
+       是合法的。return_inds决定是否返回那些困难样本在dist中的位置索引'''
     N=dist.size(0)
     t_labels=labels.expand(N,N)
     mask_pos=t_labels.eq(t_labels.t())
@@ -100,7 +101,7 @@ def hard_sample_mining(dist,labels,return_inds=False):
     min_an_v,min_an_ind=pt.min(dist[mask_neg].contiguous().view(N,-1),dim=1)
     if return_inds:
         # _,y=pt.where(mask_pos==True) #我降低了PyTorch版本为1.1.0报错：TypeError: where(): argument 'input' (position 2) must be Tensor, not bool
-        #已知的是1.3版本之后torch.where实现同numpy.where
+        #已知的是1.3版本之后torch.where实现才同numpy.where
         y=(mask_pos==True).nonzero()[:,1] #替代方案：https://blog.csdn.net/judgechen1997/article/details/105820709
 
         x=pt.arange(N)
@@ -112,9 +113,9 @@ def hard_sample_mining(dist,labels,return_inds=False):
         y=y.contiguous().view(N,-1)
         an_x,an_y=x,y[x,min_an_ind]
         return max_ap_v,min_an_v,(ap_x,ap_y),(an_x,an_y) #Note that 
-                                #     |           |      #dist[ap_x,ap_y] == dist[ap_inds] == max_ap_v 
-                                #  ap_inds     an_inds   #and 
-                                #                        #dist[an_x,an_y] == dist[an_inds] == min_an_v
+                                #     |           |      #dist[ap_x,ap_y] == dist[ap_coords] == max_ap_v 
+                                # ap_coords   an_coords  #and 
+                                #                        #dist[an_x,an_y] == dist[an_coords] == min_an_v
     return max_ap_v,min_an_v
 
 class HorizontalPool2d(nn.Module): #水平池化
@@ -311,7 +312,10 @@ class GRL(nn.Module): #梯度反转层
 if __name__ == "__main__":
     # k,s=seek_ks_3m(24,6)[:2]
     # print(k,s)
-    X=np.arange(3*5*3).reshape(3,5,3)
-    Y=np.arange(4*5*2).reshape(4,5,2)
-    print(calc_dist_DMLI(pt.from_numpy(X).to(pt.float32),pt.from_numpy(Y).to(pt.float32)))
-    print(calc_dist_DMLI(X,Y))
+    X=np.arange(5*6).reshape(5,-1)
+    Y=np.arange(5*6).reshape(5,-1)
+    dist=euc_dist_pro(pt.from_numpy(X).to(pt.float32),pt.from_numpy(Y).to(pt.float32))
+    print(dist)
+    labels=pt.tensor([0,1,1,0,2,2])
+    t=hard_sample_mining(dist,labels,True)
+    print(t)

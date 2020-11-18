@@ -23,25 +23,59 @@ def setup_seed(seed):
 
 #可视化：https://zhuanlan.zhihu.com/p/220403674
 
+def get_batch(data_iter, data_loader): #data_iter是enumerate(dataloader)对象，来自
+                                       #https://github.com/yujheli/ARN/blob/master/reid_main.py
+    try:
+        _, batch = next(data_iter)
+    except:
+        data_iter = enumerate(data_loader)
+        _, batch = next(data_iter)
+    return batch, data_iter
+
 @measure_time
-def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,use_amp=False, \
+def train(net,train_loader,losses,optimizer,epochs,scheduler=None,coeffis=None,device=None,checkpoint=None,use_amp=False, \
           amp_level='O1',losses_name=None,out_loss_map=None,if_visdom=False,if_tensorboard=False,tensorboard_subdir=None,
           use_pcids=None,**kwargs):
     '''注意，对于losses参数，即使只有一个损失，也要写为(loss,)或者[loss]，即序列形式。总体损失loss
        =coeffis[0]*losses[0](net_out[0],targets)+coeffis[1]*losses[1](net_out[1],targets)+...
        device的值可以是：str('cpu' or 'cuda'),scalar(0, index of GPU),list([0,1], indexes list 
        of GPU),None(优先使用GPU),torch.device,对于list，表示多卡训练，特别的，可以取值'DP'，表示
-       使用全部GPU设备并行。所有损失都默认使用pids信息，在查看所有损失定义的时候，损失最后一个参数都
-       是pids，如果要使用cids，必须显式提供use_pcids参数，取值为'P','C','PC','CP'，默认仅使用pids，
-       'PC'和'CP'的区别是pids在前还是cids在前，如果非这四种取值，则表示不使用任何监督信号，相应的损失
-       定义也不含有pids和cids参数，且use_pcids长度和losses参数一致'''
+       使用全部GPU设备并行。通常损失仅仅使用了pids信息，而且是作为损失函数定义中的最后一个参数，如果
+       要使用cids，或者两者都使用，再或者两者都不使用，必须显式提供use_pcids参数，取值为'P','C',
+       'PC','CP'，譬如'P'表示仅使用pids，是默认值，而'PC'和'CP'的区别是pids在前还是cids在前，如果
+       非这四种取值，则表示不使用任何监督信号，相应的损失定义也不含有pids和cids参数，use_pcids长度和
+       losses参数一致。为了扩展到UDA场景，批训练数据train_loader包括两个来源，源域有标签数据和目标
+       域无标签数据，此时定义为train_loader:=(source_train_loader,target_train_loader)，因此，在
+       定义网络模型的forward输入时，也必须是source在前，target在后，且注意目标
+       域没有行人标签，但具有摄像头标签，至于损失使用哪些监督信号，还是依靠use_pcids参数指定，其取值
+       还是基本的四种，只不过在前面还有一个字符标识'S'或'T'，譬如'SP'表示使用源域行人标签，但是像'TP'
+       显然是不合法的，因为目标域没有行人标签，在UDA情形下，网络的输入变成了两个训练批次，一是源域训
+       练批次，二是目标域训练批次，另外我们设定源域在前，目标域在后'''
+    UDA=False
+    if isinstance(train_loader,(list,tuple)) and len(train_loader)==2:
+        UDA=True
+        print('Now is in Unsupervised Domain Adaption(UDA) scenario!' \
+            '\nNote: train_loader:=(source_train_loader,target_train_loader) and net(source_train_imgs,target_train_imgs)')
+        source_train_loader,target_train_loader=train_loader
+        if len(iter(source_train_loader).__next__())!=3 or len(iter(target_train_loader).__next__())!=2: #对源域批训练数据和目标域批训练数据进行检查，
+                                       #源域每一批batch应该包含图像、行人ID以及摄像头ID三项，而目标域是两项
+            raise ValueError('Batch in source_train_loader must have imgs,' \
+                'pids and cids, and batch in target_train_loader must have imgs and cids, please check it!')
+    
+    if if_visdom: #https://github.com/facebookresearch/visdom
+        print('Startup visdom, please execute "python -m visdom.server"!')
+        vis=Visdom(env='train') #python -m visdom.server
     if if_tensorboard:
-        log_dir=os.path.normpath(os.path.join(os.path.dirname(__file__),'../../data/tensorboard_logdir/', \
+        log_dir=os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../data/tensorboard_logdir/', \
             '' if tensorboard_subdir is None else tensorboard_subdir))
         print('Startup tensorboard, please execute "python -m tensorboard.main --logdir=%s"!'%log_dir)
-        print('' if net.train_mode==True else 'WARN: To plot model in tensorboard, net.train_mode should be True!\n',end='')
+        # print('' if net.train_mode==True else 'WARN: To plot model in tensorboard, net.train_mode should be True!\n',end='')
+        net.train();net.train_mode=True # ↑
         with SummaryWriter(log_dir=log_dir) as writer:
-            writer.add_graph(net,iter(train_iter).__next__()[0]) #需确保模型train_mode属性为True，否则在测试模式下，模型可能缺少一些组件，譬如分类层
+            if UDA:
+                writer.add_graph(net,(iter(source_train_loader).__next__()[0],iter(target_train_loader).__next__()[0]))
+            else:
+                writer.add_graph(net,iter(train_loader).__next__()[0]) #需确保模型train_mode属性为True，否则在测试模式下，模型可能缺少一些组件，譬如分类层
     #运行：cd到event事件保存路径下，python -m tensorboard.main --logdir=./ 或者python -m tensorboard.main --logdir=具体的路径
     #切记不要给路径添加引号，否则显示空。https://blog.csdn.net/qq_23142123/article/details/80519535
     #https://blog.csdn.net/Aa545620073/article/details/89374112
@@ -108,10 +142,6 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         checkpoint.loaded=False #与此同时，将loaded标志置为False，下次必须重新加载才行
     else:
         start_epoch=0
-    # if scheduler is not None and isinstance(scheduler,partial):
-    #     scheduler=scheduler(last_epoch=start_epoch-1)
-    # if scheduler is not None:
-    #     scheduler.step(start_epoch-1)
 
     if device.type=='cuda':
         cudnn.benchmark=True
@@ -119,13 +149,12 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
         if DP_flag: #注意DataParallel包裹放在一切就绪之后，即模型net已经放到GPU设备上、加载好参数、设置好APEX等等之后
             gpu_num=pt.cuda.device_count()
             print('Use Data Parallel to Wrap Model',end='')
-            net=nn.DataParallel(net,device_ids=device_ids) #允许多卡训练，https://blog.csdn.net/zhjm07054115/article/details/104799661/
-                                 #似乎Windows并不支持多卡训练，我收到警告：UserWarning: Pytorch is not compiled with NCCL support
-                                 #https://github.com/pytorch/pytorch/issues/12277
+            net=nn.DataParallel(net,device_ids=device_ids) #允许多卡训练，但我收到警告：UserWarning: Pytorch is not compiled with NCCL support
+                                 #参见https://github.com/pytorch/pytorch/issues/12277
                                  #https://discuss.pytorch.org/t/pytorch-windows-is-parallelization-over-multiple-gpus-now-possible/59971
-                                 #https://www.programmersought.com/article/7854938878/
-                                 #在工作站上的测试，双2080ti，但不仅是rank-1还是mAP都比我的2070SUPER单卡降低了2个点，而且时间
-                                 #还有所增加。好吧，直接忽略该警告即可
+                                 #https://www.programmersought.com/article/7854938878/，在工作站上的测试，双2080ti，结果相比单卡有所降低，时耗也增大一些
+                                 #关于负载均衡的问题，参考https://www.cnblogs.com/zf-blog/p/12010742.html，但是该方法不适用Windows环境，
+                                 #此外还可以用DistributedDataParallel解决
             if gpu_num==1:
                 print(', but you have only one GPU')
             else:
@@ -141,7 +170,10 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     else:
         net.train_mode=True
     
-    all_batches_num=len(train_iter)
+    if UDA:
+        all_batches_num=max([len(source_train_loader),len(target_train_loader)])
+    else:
+        all_batches_num=len(train_loader)
     losses_num=len(losses)
     give_loss_name=True
     if losses_name is None: #实际losses_name的长度应等于所有损失函数的输出数量的总和，这边只是先赋一个初值，后面可能
@@ -153,54 +185,106 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
     if coeffis is None: #coeffis长度默认和losses_name保持一致，默认值全为1
         coeffis=[1]*len(losses_name)
     if use_pcids is None:
-        use_pcids=['P' for i in range(losses_num)]
+        if UDA:
+            print('WARN: all losses only use source domain pids(SP) as supervision defaultly!')
+            use_pcids=['SP' for i in range(losses_num)]
+        else:
+            print('WARN: all losses only use pids(P) as supervision defaultly!')
+            use_pcids=['P' for i in range(losses_num)]
     if len(use_pcids)!=losses_num:
         raise ValueError('use_pcids\'s length must be the same as losses!')
 
-    # out_loss_map=kwargs.get('out_loss_map') #譬如：[[(0,1),(0,)],[(2,3),(1,2)]]，表示网络输出out的第一个和第二个值（张量）作为第一个损失的输入，而
-                                            #out的第三个输出和第四个输出分别是作为第二个损失和第三个损失的输入，所以一共有三个损失，那么coeffis损失系
-                                            #数列表应该包含三个权重值，一般情况下都是这样，但是还有一种特殊情况之前也已经介绍过，就是像AlignedReID那
-                                            #种一个损失函数输出多个子损失的，此处姑且假设第一个损失函数的输出包含两个值，那么拢共就应该有四个损失，相
-                                            #应的coeffis长度变为4。out_loss_map参数是可选的，默认为None，表示一一对应关系，即网络输出的第一个张量作
-                                            #为第一个损失的输入，第二个输出张量作为第二个损失的输入，依此类推，写法就是：[[(0,),(0,)],[(1,),(1,)]]
     coeffis_lossesname_flag=True
+    print_lossesinfo_flag=True
     
-    if if_visdom: #https://github.com/facebookresearch/visdom
-        print('Startup visdom, please execute "python -m visdom.server"!')
-        vis=Visdom(env='train') #python -m visdom.server
     for epoch in range(start_epoch,epochs):
         pt.cuda.synchronize()
         last_time=time.time()
-        for batch_ind,(batchImgs,pids,cids) in enumerate(train_iter):
-            batchImgs,pids,cids=batchImgs.to(device),pids.to(device).to(pt.int64),cids.to(device).to(pt.int64)
-            # print([False for i in net.parameters() if not i.is_cuda]) #查看是否有网络参数不在cuda上
-            out=net(batchImgs)
+
+        if UDA:
+            source_train_iter=enumerate(source_train_loader)
+            target_train_iter=enumerate(target_train_loader)
+        else:
+            train_iter=enumerate(train_loader)
+        for batch_ind in range(all_batches_num):
+            if UDA:
+                (source_batchImgs,source_batchPids,source_batchCids),source_train_iter= \
+                    get_batch(source_train_iter,source_train_loader)
+                source_batchImgs,source_batchPids,source_batchCids=source_batchImgs.to(device), \
+                    source_batchPids.to(device).to(pt.int64),source_batchCids.to(device).to(pt.int64)
+                (target_batchImgs,target_batchCids),target_train_iter= \
+                    get_batch(target_train_iter,target_train_loader)
+                target_batchImgs,target_batchCids=target_batchImgs.to(device), \
+                    target_batchCids.to(device).to(pt.int64)
+            else:
+                (batchImgs,batchPids,batchCids),train_iter=get_batch(train_iter,train_loader)
+                batchImgs,batchPids,batchCids=batchImgs.to(device), \
+                    batchPids.to(device).to(pt.int64),batchCids.to(device).to(pt.int64)
+            if UDA:
+                out=net(source_batchImgs,target_batchImgs)
+            else:
+                out=net(batchImgs)
+
             if not isinstance(out,(list,tuple)):
                 out=[out]
-            if out_loss_map is None and len(out)!=losses_num: #假设网络有n个输出，那么必须有相应的n个损失（这个n为参数losses长度）
+            if out_loss_map is None and len(out)!=losses_num: #假设网络有n个输出，那么必须有相应的n个损失（这个n为参数losses长度），
+                                                              #如果不能一一对应，则使用“输出-损失”映射out_loss_map来进行控制
                 raise ValueError('The num(%d) of net\'s out must be equal to losses\' length(%d)!'%(len(out),losses_num))
-            
             Llist=[]
+            
+            #除了指定的几种模式['P','C','PC','CP','SP','SC','SPC','SCP','TC']，以控制返回行人ID或摄像头ID，否则一律返回[]空，表示不使用任何监督信号
+            if UDA:
+                select_pcids={'SP':[source_batchPids],'SC':[source_batchCids],'SPC':[source_batchPids, \
+                    source_batchCids],'SCP':[source_batchCids,source_batchPids],'TC':[target_batchCids]}
+            else:
+                select_pcids={'P':[batchPids],'C':[batchCids],'PC':[batchPids,batchCids],'CP':[batchCids,batchPids]}
+            if print_lossesinfo_flag:
+                print_losses_info=[]
+
             if out_loss_map is None:
                 for losses_ind,loss in enumerate(losses):
-                    subL=loss(out[losses_ind],*[pids] if use_pcids[losses_ind]=='P' else [cids] \
-                        if use_pcids[losses_ind]=='C' else [pids,cids] if use_pcids[losses_ind]=='PC' \
-                        else [cids,pids] if use_pcids[losses_ind]=='CP' else [])
+                    if print_lossesinfo_flag: #只记录并打印一次
+                        loss_record_info=[loss.__name__ if loss.__class__.__name__=='function' else loss.__class__.__name__, \
+                            losses_ind,use_pcids[losses_ind] if use_pcids[losses_ind] \
+                            in select_pcids.keys() else 'None',] #损失函数名称，损失输入（网络输出列表的下标），监督信号，
+                                                                 #损失函数的输出（可能包含多个子损失）个数，输出（子损失）名称，输出（子损失）权重系数
+                    subL=loss(out[losses_ind],*select_pcids.get(use_pcids[losses_ind],[]))
                     if isinstance(subL,(list,tuple)): #要求损失函数的输出要么是单个0维tensor（损失是标量），要么是多个0维tensor的列表！
                         Llist.extend(subL)
+                        if print_lossesinfo_flag:
+                            loss_record_info.append(len(subL))
                     else:
                         Llist.append(subL)
-            else:
+                        if print_lossesinfo_flag:
+                            loss_record_info.append(1)
+                    if print_lossesinfo_flag:
+                        print_losses_info.append(loss_record_info)
+            else: #关于out_loss_map参数的使用，譬如：[[(0,1),(0,)],[(2,3),(1,2)]]，这表示网络输出out的第一个和第二个值（张量）作为第一个损失的输入，而out
+                  #的第三个输出和第四个输出分别是作为第二个损失和第三个损失的输入，所以一共有三个损失，那么coeffis损失系数列表应该包含三个权重值，一般情况下
+                  #都是这样，但是还有一种特殊情况之前也已经介绍过，就是像AlignedReID那种一个损失函数输出多个子损失的，此处姑且假设第一个损失函数的输出包含两
+                  #个值，那么拢共就应该有四个损失，相应的coeffis长度变为4。out_loss_map参数是可选的，默认为None，表示一一对应关系，即网络输出的第一个张量作
+                  #为第一个损失的输入，第二个输出张量作为第二个损失的输入，依此类推，写法就是：[[(0,),(0,)],[(1,),(1,)]]
                 for out_inds,loss_inds in out_loss_map:
+                    if print_lossesinfo_flag:
+                        losses_records_info=[[losses[loss_ind].__name__ if \
+                            losses[loss_ind].__class__.__name__=='function' else \
+                            losses[loss_ind].__class__.__name__, \
+                            ','.join([str(_oiv) for _oiv in out_inds]), \
+                            use_pcids[loss_ind] if use_pcids[loss_ind] in select_pcids.keys() \
+                            else 'None',] for loss_ind in loss_inds]
                     subLs=[losses[loss_ind](*[out[out_ind] for out_ind in out_inds], \
-                        *[pids] if use_pcids[loss_ind]=='P' else [cids] if use_pcids[loss_ind]=='C' \
-                        else [pids,cids] if use_pcids[loss_ind]=='PC' else [cids,pids] \
-                        if use_pcids[loss_ind]=='CP' else []) for loss_ind in loss_inds]
-                    for subL in subLs:
+                        *select_pcids.get(use_pcids[loss_ind],[])) for loss_ind in loss_inds]
+                    for subL_ind,subL in enumerate(subLs):
                         if isinstance(subL,(list,tuple)):
                             Llist.extend(subL)
+                            if print_lossesinfo_flag:
+                                losses_records_info[subL_ind].append(len(subL))
                         else:
                             Llist.append(subL)
+                            if print_lossesinfo_flag:
+                                losses_records_info[subL_ind].append(1)
+                    if print_lossesinfo_flag:
+                        print_losses_info.extend(losses_records_info)
             nLlist=len(Llist)
             if coeffis_lossesname_flag and (len(coeffis)<nLlist or len(losses_name)<nLlist): #只修改一次，避免重复
                 print('重置系数coeffis(%d)和损失名称losses_num(%d)，它们的长度应等于所有损失输出的数量和(%d)，coeffis全部重置为1！' \
@@ -208,8 +292,26 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                 losses_name=['loss%d'%(i+1) for i in range(nLlist)]
                 coeffis=[1]*nLlist
                 coeffis_lossesname_flag=False
-            L=sum([coeffis[i]*l for i,l in enumerate(Llist)])
 
+            if print_lossesinfo_flag:
+                print('-'*127) #https://blog.csdn.net/weixin_42280517/article/details/80814677
+                print('{1:{0}<10}|{2:{0}^12}|{3:{0}^6}|{4:{0}^6}|{5:{0}^15}|{6:{0}>12}'.format(chr(12288), \
+                    '损失函数','输入（网络输出下标）','监督信号','输出个数','输出（包含子损失，自定义）','权重系数（对应子损失）'))
+                print('-'*127)
+                sub_loss_num=np.array([loss_record_info[3] for loss_record_info in print_losses_info])
+                sub_loss_end=np.cumsum(sub_loss_num)
+                sub_loss_start=np.concatenate((np.array([0]),sub_loss_end[:-1]))
+                [loss_record_info.extend([','.join([str(_sln) for _sln in losses_name[sub_loss_start[loss_record_info_ind]: \
+                    sub_loss_end[loss_record_info_ind]]]),','.join([str(_slc) for _slc in coeffis[sub_loss_start[loss_record_info_ind]: \
+                    sub_loss_end[loss_record_info_ind]]])]) for loss_record_info_ind,loss_record_info \
+                    in enumerate(print_losses_info)]
+                for loss_record_info in print_losses_info:
+                    print('{:<20}|{:^24}|{:^12}|{:^12}|{:^30}|{:>24}'.format(*[str(item) for item in loss_record_info]))
+                print_lossesinfo_flag=False
+                print('-'*127)
+
+            L=sum([coeffis[i]*l for i,l in enumerate(Llist) if coeffis[i]!=0]) #注意此处，我添加了判断coeffis[i]!=0，如果系数为0，相应的子网络
+                                                                               #不会进行反向传播，相比较于不加此判断时，即使子网络损失计算为0仍backward
             optimizer.zero_grad()
             if use_amp:
                 with amp.scale_loss(L, optimizer) as scaled_loss:
@@ -247,7 +349,17 @@ def train(net,train_iter,losses,optimizer,epochs,scheduler=None,coeffis=None,dev
                     'optimizer':optimizer.state_dict(),
                     'scheduler':None if scheduler is None else scheduler.state_dict()},**({'amp':amp.state_dict()} if use_amp else {})})
         if kwargs.get('query_iter') and kwargs.get('gallery_iter') and kwargs.get('evaluate'):
-            print('Calc CMC of query and gallery(Test Set), ',end='')
+            print('Calc CMC of query and gallery(TestSet)',end='')
+            if UDA:
+                if kwargs.get('uda_test_who') is None:
+                    raise ValueError('Must tell which(source or target) you want to test explicitly in UDA!')
+                else:
+                    print(' for %s domain in UDA'%kwargs['uda_test_who'],end='')
+            # else:
+            #     if kwargs.get('uda_test_who') is not None:
+            #         print('WARN: param uda_test_who only used for UDA! deleting it')
+            #         del kwargs['uda_test_who']
+            print(', ',end='')
             rank1,mAP=test(net,device=device,return_top_rank=True,if_print=False,**kwargs) #kwargs参数全部传递给test函数，除了query_iter、gallery_iter、evaluate
                                                                             #是必须传递之外，还有calc_dist_funcs、alphas、re_rank这些则是可选的
             net.train() #由于test函数中更改网络为eval模式，此处重置回train模式，然后继续训练

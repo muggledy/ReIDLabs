@@ -29,6 +29,7 @@ from deep.models.utils import CheckPoint,calc_dist_DMLI
 from functools import partial
 import torch as pt
 import torch.nn as nn
+pt.multiprocessing.set_sharing_strategy('file_system')
 
 if __name__=='__main__':
     setup_seed(0)

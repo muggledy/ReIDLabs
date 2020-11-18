@@ -10,8 +10,13 @@ Rank-1:94.89% Rank-5:97.62% Rank-10:98.16% Rank-20:98.93% Rank-100:99.67%
 mAP:92.79
 如果不做重排，结果为：
 Rank-1:93.68% Rank-5:97.89% Rank-10:98.66% Rank-20:99.29% Rank-100:99.67%
-mAP:82.98
+mAP:82.98，用DataParallel结果稍微变高一点点，Rank-1:93.91%，mAP:83.22，总觉得
+DP用的有问题，大概率还是我操作不当，因为在其他实验中一般都是降低了一两个点，更重要
+的是，时间消耗更大，从2.15小时增至2.48小时，而我最关心的就是时耗，后续还要测试一下
+DDP效果
 注：结果之所以和论文有所不同，是因为我没有使用它的训练参数
+我算是见识了，在硬件设备基本不变的情况下，原本在Windows上执行20个batch需耗时17s，
+放到Linux上只需要5.5s，本代码在Linux上执行仅需44min!
 '''
 
 from initial import *
@@ -31,7 +36,8 @@ import torch as pt
 import torch.nn as nn
 from functools import partial
 from zoo.plot import plot_dataset
-from deep.loss import CrossEntropyLabelSmooth
+from deep.loss import LabelSmoothLoss
+pt.multiprocessing.set_sharing_strategy('file_system')
 
 if __name__=='__main__':
     setup_seed(0)
@@ -51,7 +57,7 @@ if __name__=='__main__':
     net=ResNet50_MGN(num_classes)
 
     softmax_loss=nn.CrossEntropyLoss()
-    # softmax_loss=CrossEntropyLabelSmooth(num_classes) #LSR Loss，没有带来提升，反而降低了0.2%
+    # softmax_loss=LabelSmoothLoss(num_classes) #LSR Loss，没有带来提升，反而降低了0.2%
     triplet_loss=TripletHardLoss(margin=0.3)
 
     losses=(triplet_loss,triplet_loss,triplet_loss,softmax_loss,softmax_loss,softmax_loss, \

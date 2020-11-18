@@ -84,7 +84,8 @@ import torch as pt
 import torch.nn as nn
 from deep.plot_match import plot_match
 from deep.lr_scheduler import WarmupMultiStepLR
-from deep.transform import Lighting
+# from deep.transform import Lighting
+pt.multiprocessing.set_sharing_strategy('file_system')
 
 if __name__=='__main__':
     setup_seed(0)
@@ -152,6 +153,6 @@ if __name__=='__main__':
         checkpoint=checkpoint,losses_name=losses_name,coeffis=None,use_amp=use_amp)
     save_gal_path=os.path.join(os.path.dirname(os.path.realpath(__file__)), \
         '../data/market1501_resnetMSML_gallery.mat')
-    test(net,query_iter,gallery_iter,eval_cmc_map,save_galFea=save_gal_path)
+    test(net,query_iter,gallery_iter,eval_cmc_map,save_galFea=save_gal_path,re_rank=False)
 
     plot_match(net,query_gallery=market1501,galfeas_path=save_gal_path)

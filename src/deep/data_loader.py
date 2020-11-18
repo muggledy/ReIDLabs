@@ -4,7 +4,7 @@ from torch.utils.data import Dataset,DataLoader
 import torchvision.transforms as T
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../'))
-from deep.transform import RandomErasing,ColorJitter,Lighting
+from deep.transform import RandomErasing,ColorJitter#,Lighting
 # from zoo.tools import LRU
 
 def read_image(img_path):
@@ -14,19 +14,31 @@ def read_image(img_path):
     return img
 
 class reidDataset(Dataset):
-    def __init__(self,dataset,transform=None):
+    def __init__(self,dataset,transform=None,pcids_mode='PC'): #可选值为：['P','C','PC']，主要是用第二个
+                                                               #（UDA场景，目标域训练集无行人ID标签）和第三个
         self.dataset=dataset
         self.transform=transform
+        self.pcids_mode=pcids_mode
+        if self.pcids_mode in ['P','C']:
+            if len(self.dataset[0])!=2:
+                raise ValueError('Each one in dataset should have two items:' \
+                    ' img_path and %s!'('pid' if self.pcids_mode=='P' else 'cid'))
+        elif self.pcids_mode=='PC':
+            if len(self.dataset[0])!=3:
+                raise ValueError('Each one in dataset must have three items: img_path,pid and cid!')
+        else:
+            raise ValueError('Invalid pcid mode!')
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self,index):
-        img_path,pid,cid=self.dataset[index]
-        img=read_image(img_path)
+        _=list(self.dataset[index])
+        img=read_image(_[0])
         if self.transform is not None:
             img=self.transform(img)
-        return img,pid,cid
+        _[0]=img
+        return _
 
 class testDataset(Dataset): #用于构造测试图像数据集，测试图像没有标签也不需要知道任何监督信息
     def __init__(self,dataset,transform=None): #dataset默认应该是一个图像路径列表，但也可以是一个文件夹路径
@@ -48,14 +60,17 @@ class testDataset(Dataset): #用于构造测试图像数据集，测试图像没
 
 '''
   DataLoader ←——————————————————— Batch Data
-       ↓                              ↑
- DataLoaderIter                   collate_fn
-       ↓                              ↑
-    Sampler —————→ Index          Img,Label
-       ↓             |                ↑
- DataSetFetcher ←————┛                |
-       ↓                              |
-    Dataset ——————→ getitem ————→ transforms
+       ↓                              ↑         #只需要着重了解DataLoader、Sampler和Dataset的关系
+ DataLoaderIter                   collate_fn    #Dataset负责图像数据以及相应标签信息的读取，其知晓所
+       ↓                              ↑         #有图像的信息，并以index（位置）作为唯一的索引方式索
+    Sampler —————→ Index          Img,Label     #引单张图像，而Sampler就是产生indexes的，DataLoader
+       ↓             |                ↑         #将根据这些indexes从Dataset中获取相关图像及标签作为
+ DataSetFetcher ←————┛                |         #batch数据，还可能对图像做transforms变换，而默认的
+       ↓                              |         #collate_fn则会将这些图像及标签分别进行打包，构成批
+    Dataset ——————→ getitem ————→ transforms    #图像和批标签
+
+https://github.com/pytorch/pytorch/blob/master/torch/utils/data/dataloader.py
+https://www.cnblogs.com/ranjiewen/p/10128046.html
 '''
 
 default_train_transforms=[T.Resize((256,128)),T.RandomHorizontalFlip(),RandomErasing(), \
@@ -80,7 +95,8 @@ def load_dataset(dataset,train_batch_size=None,test_batch_size=None,train_transf
     if test_transforms is None:
         test_transforms=default_test_transforms
     
-    #话说pin_memory究竟有什么用？
+    #话说pin_memory究竟有什么用？设为True，意味着生成的Tensor属于内存中的锁页内存，不会与虚拟内存发生
+    #交换，仅适用内存极度充足的情况
     #https://stackoverflow.com/questions/55563376/pytorch-how-does-pin-memory-works-in-dataloader
     if num_workers is None:
         num_workers=4
@@ -100,8 +116,9 @@ def load_dataset(dataset,train_batch_size=None,test_batch_size=None,train_transf
     else:
         return query_iter,gallery_iter
 
-def load_train_iter(dataset,batch_size=32,transforms=default_train_transforms,sampler=None,num_workers=4):
-    train_iter=DataLoader(reidDataset(dataset,T.Compose(transforms)), \
+def load_train_iter(dataset,batch_size=32,transforms=default_train_transforms,sampler=None, \
+                    num_workers=4,pcids_mode='PC'):
+    train_iter=DataLoader(reidDataset(dataset,T.Compose(transforms),pcids_mode), \
         batch_size=batch_size,shuffle=True if sampler is None else False,num_workers=num_workers, \
         sampler=None if sampler is None else sampler(dataset),drop_last=True)
     return train_iter

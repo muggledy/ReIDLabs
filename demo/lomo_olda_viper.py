@@ -5,6 +5,7 @@ I can't implement the kernel version of olda correctly! Help...
 from initial import *
 from zoo.viper import get_lomo_viper,get_gog_viper
 from zoo.olda import olda,kolda
+from zoo.tools import print_cmc
 
 t1=time.time()
 
@@ -40,6 +41,7 @@ for i in range(numFlods):
     cs.append(c)
 cs=np.array(cs)
 c_mean=np.mean(cs,axis=0)
+print_cmc(c_mean)
 print('all time consumes:',time.time()-t1)
 plot_cmc(c_mean,labels=['viper'],verbose=True)
 

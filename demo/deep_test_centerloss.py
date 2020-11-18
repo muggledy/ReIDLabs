@@ -15,6 +15,7 @@ from deep.eval_metric import eval_cmc_map
 from deep.models.utils import CheckPoint
 from functools import partial
 import torch as pt
+pt.multiprocessing.set_sharing_strategy('file_system')
 
 if __name__=='__main__':
     setup_seed(0)

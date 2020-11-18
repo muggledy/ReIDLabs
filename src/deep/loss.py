@@ -8,9 +8,10 @@ from torch import nn, autograd
 
 class TripletHardLoss(nn.Module):
     '''难样本的三元组损失'''
-    def __init__(self,margin=None,mode='norm'): #两个改进：'softplus'和'applus'，只有在使用softplus模式时，无需margin参数
+    def __init__(self,margin=None,mode='norm',PK=True): #两个改进：'softplus'和'applus'，只有在使用softplus模式时，无需margin参数
         super(TripletHardLoss,self).__init__()
         self.mode=mode
+        self.PK=PK
         if self.mode in ['norm','applus']:
             if margin is None:
                 raise ValueError('margin must not be None!')
@@ -22,20 +23,26 @@ class TripletHardLoss(nn.Module):
                                                               #and negative
                                                               #https://pytorch.org/docs/master/nn.html#distance-functions
 
-    def forward(self,X,Y): #X's shape:(batch_size,dim)，这个批量的大小为PxK，P个不同行人，每个行人K张不同图像
-                           #，具体的示例，设K=4，则第1到第4张图像是属于某一行人的四张不同图像，第5到第8张是属于
-                           #另一行人的四张不同图像，等等。我们要做的就是从这个批量中挖掘困难样本的三元组。参数Y
-                           #的作用仅仅是构建mask掩码（Y是批量数据X的标签值，此处也就是图像的pid），由于我们的批
-                           #量是“有序”的（有序是指从前到后每k个图像属于同一行人），实际上Y也可以不需要，有则鲁棒
+    def forward(self,X,Y): #X's shape:(batch_size,dim)，这个批量大小应为PxK，表示含有P个不同行人，每个行人有K张不同
+                           #图像，我们要做的就是从这个批量中挖掘困难样本的三元组。但是不同于hard_sample_mining函数绝对
+                           #要求PxK采样，此处即使每个行人的图像数量不同，代码也不会出错，不过每个行人图像必须大于等于2张
+                           #，否则就找不到positive了，对于找不到positive或者negative的anchor就不构建三元组了，因此此
+                           #实现理论上适用于更多的批量采样方法，当然也可以替换成hard_example_mining实现，速度比for循环
+                           #稍微快点，但必须PK采样，这就是PK参数含义
         dist=euc_dist(X.t()).sqrt() #做sqrt是因为euc_dist返回的是欧氏距离的平方，其实也可以不做sqrt
-        n=X.size(0)
-        mask=Y.expand(n,n).eq(Y.expand(n,n).t()) #mask作用以及困难样本挖掘请参见https://www.bilibili.com/video/BV1Pg4y1q7sN?p=36
-        dist_ap,dist_an=[],[]
-        for i in range(n):
-            dist_ap.append(dist[i][mask[i]==True].max().unsqueeze(0)) #在相同行人中找最大距离作为正例困难样本对距离
-            dist_an.append(dist[i][mask[i]==False].min().unsqueeze(0)) #在不同行人中找最小距离作为负例困难样本对距离
-        dist_ap=pt.cat(dist_ap)
-        dist_an=pt.cat(dist_an)
+        if self.PK:
+            dist_ap,dist_an=hard_sample_mining(dist,Y)
+        else:
+            n=X.size(0)
+            mask=Y.expand(n,n).eq(Y.expand(n,n).t()) #mask作用以及困难样本挖掘请参见https://www.bilibili.com/video/BV1Pg4y1q7sN?p=36
+            dist_ap,dist_an=[],[]
+            for i in range(n):
+                dist_aps,dist_ans=dist[i][mask[i]==True],dist[i][mask[i]==False]
+                if not(len(dist_aps)==1 or len(dist_ans)<=1):
+                    dist_ap.append(dist_aps.max().unsqueeze(0)) #在相同行人中找最大距离作为正例困难样本对距离
+                    dist_an.append(dist_ans.min().unsqueeze(0)) #在不同行人中找最小距离作为负例困难样本对距离
+            dist_ap=pt.cat(dist_ap)
+            dist_an=pt.cat(dist_an)
         if self.mode=='norm': #标准（难）三元组损失
             return pt.max(dist_ap-dist_an+self.margin,pt.zeros_like(dist_ap)).mean() #一样的结果：self.ranking_loss(dist_ap,dist_an,-pt.ones_like(dist_ap))
         elif self.mode=='softplus': #软margin版本，标准三元组为硬margin
@@ -135,7 +142,7 @@ class OIMLoss(nn.Module): #copy from https://github.com/Cysu/open-reid/issues/90
         return loss
         # return loss, inputs
 
-class CrossEntropyLabelSmooth(nn.Module):
+class LabelSmoothLoss(nn.Module):
     """Cross entropy loss with label smoothing regularizer.
     Reference:
     Szegedy et al. Rethinking the Inception Architecture for Computer Vision. CVPR 2016.
@@ -146,7 +153,7 @@ class CrossEntropyLabelSmooth(nn.Module):
     comes form https://github.com/michuanhaohao/reid-strong-baseline/
     """
     def __init__(self, num_classes, epsilon=0.1):
-        super(CrossEntropyLabelSmooth, self).__init__()
+        super(LabelSmoothLoss, self).__init__()
         self.num_classes = num_classes
         self.epsilon = epsilon
         self.logsoftmax = nn.LogSoftmax(dim=1)
